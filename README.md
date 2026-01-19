@@ -1,257 +1,257 @@
 <div align="center">
-  <img src="https://cdn.yobc.de/assets/boardcast.png" alt="boardcast" width="300">
+  <img src="assets/boardcast.png" alt="boardcast" width="300">
 </div>
 
 <div align="center">
-  <p><strong>轻量极简的实时协作文字白板</strong></p>
+  <p><strong>Lightweight and Minimalist Real-Time Collaborative Text Whiteboard</strong></p>
 </div>
 
 <div align="center">
-  <a href="#✨-特性">特性</a> •
-  <a href="#📦-安装">安装</a> •
-  <a href="#⚙️-配置">配置</a> •
-  <a href="#🛠️-开发">开发</a>
+  <a href="#✨-features">Features</a> •
+  <a href="#📦-installation">Installation</a> •
+  <a href="#⚙️-configuration">Configuration</a> •
+  <a href="#🛠️-development">Development</a>
 </div>
 
-## 📖 概述
+## 📖 Overview
 
-BoardCast 是一个轻量级的实时协作白板应用，使用 Go 语言开发。它允许多个用户通过密码认证后在同一个白板上实时协作编辑文本内容。应用具有简洁的用户界面，支持 WebSocket 实时同步，内置快照功能可随时保存和恢复内容，是团队协作、会议记录、头脑风暴的理想工具。
+BoardCast is a lightweight real-time collaborative whiteboard application developed in Go. It allows multiple users to authenticate via password and collaborate on editing text content in real-time on the same whiteboard. The application features a clean user interface, supports WebSocket real-time synchronization, and includes a built-in snapshot feature for saving and restoring content at any time, making it an ideal tool for team collaboration, meeting notes, and brainstorming.
 
-## 🎬 演示
+## 🎬 Demo
 
 <div align="center">
-  <img src="https://cdn.yobc.de/assets/boardcast.gif" alt="BoardCast" width="1280">
+  <img src="assets/boardcast.gif" alt="BoardCast" width="1280">
 </div>
 
-## ✨ 特性
+## ✨ Features
 
-### 🔐 安全认证
-- 基于密码的访问控制
-- 会话管理和安全的 Cookie 存储
-- bcrypt 密码加密
-- 可选生成随机密码
+### 🔐 Secure Authentication
+- Password-based access control
+- Session management with secure cookie storage
+- bcrypt password encryption
+- Optional random password generation
 
-### 🔄 实时协作
-- WebSocket 实时通信
-- 多用户同步编辑
-- 异常断线自动重连
-- 自动内容保存和恢复
+### 🔄 Real-Time Collaboration
+- WebSocket real-time communication
+- Multi-user synchronized editing
+- Automatic reconnection on disconnection
+- Automatic content saving and restoration
 
-### 📸 快照管理
-- 一键保存白板内容快照
-- 快速恢复历史快照
-- 本地文件持久化存储
-- 支持覆盖更新
+### 📸 Snapshot Management
+- One-click saving of whiteboard content snapshots
+- Quick restoration of historical snapshots
+- Local file persistent storage
+- Support for overwriting updates
 
-### 📱 响应式设计
-- 适配桌面和移动设备
-- 简洁直观的用户界面
-- 现代化的设计风格
-- 支持暗色主题
+### 📱 Responsive Design
+- Adapted for desktop and mobile devices
+- Clean and intuitive user interface
+- Modern design style
+- Support for dark theme
 
-### 🚀 轻量高效
-- 单文件部署
-- 开箱即用
-- 低资源占用
-- 无数据库依赖
+### 🚀 Lightweight and Efficient
+- Single-file deployment
+- Out-of-the-box usage
+- Low resource consumption
+- No database dependency
 
-### 🛠️ 运维友好
-- Docker 容器化支持
-- 多平台二进制发布
-- 优雅关闭和错误处理
-- 结构化日志
+### 🛠️ Operations-Friendly
+- Docker containerization support
+- Multi-platform binary releases
+- Graceful shutdown and error handling
+- Structured logging
 
-## 📦 安装
+## 📦 Installation
 
-### 📋 二进制发布版本
+### 📋 Binary Releases
 
-从 [GitHub Releases](https://github.com/yosebyte/boardcast/releases) 页面下载适合您系统的预编译二进制文件。
+Download the pre-compiled binary files suitable for your system from the [GitHub Releases](https://github.com/yosebyte/boardcast/releases) page.
 
-📱 **支持的平台**：
-- **🐧 Linux**: amd64, arm64, arm, 386, mips 等
+📱 **Supported Platforms**:
+- **🐧 Linux**: amd64, arm64, arm, 386, mips, etc.
 - **🪟 Windows**: amd64, arm64, 386
 - **🍎 macOS**: amd64, arm64 (Apple Silicon)
 - **🔥 FreeBSD**: amd64, arm64
 
-### 🔧 从源码编译
+### 🔧 Compile from Source
 
 ```bash
-# 克隆仓库
+# Clone the repository
 git clone https://github.com/yosebyte/boardcast.git
 cd boardcast
 
-# 编译
+# Compile
 go mod download
 go build -o boardcast ./cmd/boardcast
 
-# 运行
+# Run
 ./boardcast --password "your-secure-password"
 ```
 
-### 🐳 Docker 镜像
+### 🐳 Docker Image
 
 ```bash
-# 从 GitHub Container Registry 拉取
+# Pull from GitHub Container Registry
 docker pull ghcr.io/yosebyte/boardcast:latest
 
-# 或者自己构建
+# Or build yourself
 docker build -t boardcast .
 ```
 
-### 📝 使用指南
+### 📝 Usage Guide
 
-1. **🌐 访问应用**: 在浏览器中打开应用地址
-2. **🔑 身份认证**: 在密码框输入密码进行登录
-3. **✏️ 开始协作**: 在白板区域输入和编辑文本内容
-4. **💾 保存快照**: 点击保存按钮保存当前内容到本地文件
-5. **🔄 恢复快照**: 点击恢复按钮从快照文件恢复内容
-6. **🎨 主题切换**: 点击切换按钮切换明暗主题
-7. **🚪 断开连接**: 点击退出按钮登出并断开连接
+1. **🌐 Access the Application**: Open the application address in your browser
+2. **🔑 Authentication**: Enter the password in the password field to log in
+3. **✏️ Start Collaborating**: Input and edit text content in the whiteboard area
+4. **💾 Save Snapshot**: Click the save button to save the current content to a local file
+5. **🔄 Restore Snapshot**: Click the restore button to restore content from the snapshot file
+6. **🎨 Theme Toggle**: Click the toggle button to switch between light and dark themes
+7. **🚪 Disconnect**: Click the exit button to log out and disconnect
 
-**📊 连接状态指示**：
-- **🔴 红色密码框**: 未连接状态，需要输入密码进行认证
-- **🟡 黄色密码框**: 连接中状态，正在建立WebSocket连接
-- **🟢 绿色密码框**: 已连接状态，可以正常进行实时协作
+**📊 Connection Status Indicators**:
+- **🔴 Red Password Field**: Disconnected state, requires password input for authentication
+- **🟡 Yellow Password Field**: Connecting state, establishing WebSocket connection
+- **🟢 Green Password Field**: Connected state, normal real-time collaboration possible
 
-**📸 快照功能说明**：
-- 快照文件保存为 `boardcast.txt`，位于应用运行目录
-- 保存快照会覆盖之前的快照文件
-- 恢复快照会将内容同步到所有在线用户
+**📸 Snapshot Feature Notes**:
+- Snapshot files are saved as `boardcast.txt` in the application run directory
+- Saving a snapshot overwrites the previous snapshot file
+- Restoring a snapshot synchronizes the content to all online users
 
-## ⚙️ 配置
+## ⚙️ Configuration
 
-### 🚀 命令行参数
+### 🚀 Command Line Arguments
 
 ```bash
-./boardcast [选项]
+./boardcast [options]
 ```
 
-**📝 可用选项：**
+**📝 Available Options:**
 
-| 参数 | 类型 | 默认值 | 描述 |
-|------|------|--------|------|
-| `--password` | string | 随机生成 | 🔐 访问密码 |
-| `--port` | string | `8200` | 🌐 服务器监听端口 |
-| `--version` | bool | `false` | ℹ️ 显示版本信息并退出 |
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `--password` | string | Randomly generated | 🔐 Access password |
+| `--port` | string | `8200` | 🌐 Server listening port |
+| `--version` | bool | `false` | ℹ️ Display version information and exit |
 
-**💡 示例：**
+**💡 Examples:**
 
 ```bash
-# 使用随机密码
+# Use random password
 ./boardcast
 
-# 自定义密码和端口
+# Custom password and port
 ./boardcast --password "secret" --port 3000
 
-# 查看版本
+# View version
 ./boardcast --version
 ```
 
-## 🛠️ 开发
+## 🛠️ Development
 
-### 📁 项目结构
+### 📁 Project Structure
 
 ```
 boardcast/
-├── cmd/boardcast/         # 应用程序入口点
-│   └── main.go            # 主函数
-├── internal/              # 内部包
-│   ├── server.go          # HTTP 服务器
-│   ├── auth/              # 认证模块
-│   │   └── auth.go        # 认证管理器
-│   ├── config/            # 配置管理
-│   │   └── config.go      # 配置解析和验证
-│   ├── handler/           # HTTP 处理器
-│   │   └── handlers.go    # 路由处理函数
-│   ├── template/          # HTML 模板
-│   │   └── whiteboard.go  # 白板界面模板
-│   └── websocket/         # WebSocket 管理
-│       └── hub.go         # WebSocket 连接管理器
-├── .github/workflows/     # GitHub Actions 工作流
-│   ├── docker.yml         # Docker 镜像构建工作流
-│   └── release.yml        # 二进制包发布工作流
-├── Dockerfile             # Docker 构建文件
-├── .goreleaser.yml        # GoReleaser 配置
-├── go.mod                 # Go 模块定义
-├── go.sum                 # Go 模块校验和
-└── README.md              # 项目文档
+├── cmd/boardcast/         # Application entry point
+│   └── main.go            # Main function
+├── internal/              # Internal packages
+│   ├── server.go          # HTTP server
+│   ├── auth/              # Authentication module
+│   │   └── auth.go        # Authentication manager
+│   ├── config/            # Configuration management
+│   │   └── config.go      # Configuration parsing and validation
+│   ├── handler/           # HTTP handlers
+│   │   └── handlers.go    # Route handling functions
+│   ├── template/          # HTML templates
+│   │   └── whiteboard.go  # Whiteboard interface template
+│   └── websocket/         # WebSocket management
+│       └── hub.go         # WebSocket connection manager
+├── .github/workflows/     # GitHub Actions workflows
+│   ├── docker.yml         # Docker image build workflow
+│   └── release.yml        # Binary release workflow
+├── Dockerfile             # Docker build file
+├── .goreleaser.yml        # GoReleaser configuration
+├── go.mod                 # Go module definition
+├── go.sum                 # Go module checksums
+└── README.md              # Project documentation
 ```
 
-### 🧩 核心组件
+### 🧩 Core Components
 
-#### 1. 🌐 服务器 (`internal/server.go`)
-- HTTP 服务器配置和生命周期管理
-- 路由注册和中间件
-- 优雅关闭处理
+#### 1. 🌐 Server (`internal/server.go`)
+- HTTP server configuration and lifecycle management
+- Route registration and middleware
+- Graceful shutdown handling
 
-#### 2. 🔐 认证 (`internal/auth/`)
-- 基于 bcrypt 的密码验证
-- Session 管理
-- 认证中间件
+#### 2. 🔐 Authentication (`internal/auth/`)
+- bcrypt-based password verification
+- Session management
+- Authentication middleware
 
-#### 3. 🔌 WebSocket 管理 (`internal/websocket/`)
-- 客户端连接管理
-- 实时消息广播
-- 内容同步
-- 快照保存和恢复功能
+#### 3. 🔌 WebSocket Management (`internal/websocket/`)
+- Client connection management
+- Real-time message broadcasting
+- Content synchronization
+- Snapshot saving and restoration features
 
-#### 4. 🎯 处理器 (`internal/handler/`)
-- HTTP 路由处理
-- 请求验证和响应
-- 静态文件服务
-- 快照API端点处理
+#### 4. 🎯 Handlers (`internal/handler/`)
+- HTTP route handling
+- Request validation and responses
+- Static file serving
+- Snapshot API endpoint handling
 
-### 🛠️ 技术栈
+### 🛠️ Tech Stack
 
-- **🐹 后端**: Go 1.25+
+- **🐹 Backend**: Go 1.25+
 - **🔌 WebSocket**: Gorilla WebSocket
-- **🔐 认证**: Gorilla Sessions + bcrypt
-- **🎨 前端**: 原生 HTML/CSS/JavaScript
-- **🐳 容器化**: Docker + 多阶段构建
+- **🔐 Authentication**: Gorilla Sessions + bcrypt
+- **🎨 Frontend**: Native HTML/CSS/JavaScript
+- **🐳 Containerization**: Docker + multi-stage builds
 - **🔄 CI/CD**: GitHub Actions
 
-### 💻 开发环境设置
+### 💻 Development Environment Setup
 
 ```bash
-# 1. 克隆仓库
+# 1. Clone the repository
 git clone https://github.com/yosebyte/boardcast.git
 cd boardcast
 
-# 2. 安装依赖
+# 2. Install dependencies
 go mod download
 
-# 3. 运行开发服务器
+# 3. Run development server
 go run cmd/boardcast/main.go --password "dev-password"
 
-# 4. 访问应用
+# 4. Access the application
 open http://localhost:8200
 ```
 
-### 🔨 构建
+### 🔨 Building
 
 ```bash
-# 本地构建
+# Local build
 go build -o boardcast ./cmd/boardcast
 
-# 交叉编译（Linux）
+# Cross-compile (Linux)
 GOOS=linux GOARCH=amd64 go build -o boardcast-linux-amd64 ./cmd/boardcast
 
-# Docker 构建
+# Docker build
 docker build -t boardcast .
 ```
 
-## 🌐 API 接口
+## 🌐 API Endpoints
 
-| 路径 | 方法 | 描述 | 认证 |
-|------|------|------|------|
-| `/` | GET | 🏠 白板主页面 | 否 |
-| `/auth` | POST | 🔐 用户认证 | 否 |
-| `/logout` | POST | 🚪 用户登出 | 是 |
-| `/ws` | WebSocket | 🔌 WebSocket 连接 | 是 |
-| `/content` | GET | 📄 获取当前内容 | 是 |
-| `/save` | POST | 💾 保存内容快照 | 是 |
-| `/restore` | POST | 🔄 恢复内容快照 | 是 |
+| Path | Method | Description | Auth Required |
+|------|--------|-------------|---------------|
+| `/` | GET | 🏠 Whiteboard main page | No |
+| `/auth` | POST | 🔐 User authentication | No |
+| `/logout` | POST | 🚪 User logout | Yes |
+| `/ws` | WebSocket | 🔌 WebSocket connection | Yes |
+| `/content` | GET | 📄 Get current content | Yes |
+| `/save` | POST | 💾 Save content snapshot | Yes |
+| `/restore` | POST | 🔄 Restore content snapshot | Yes |
 
-## 📄 许可证
+## 📄 License
 
-本项目使用 [BSD 3-Clause License](LICENSE) 许可证
+This project uses the [BSD 3-Clause License](LICENSE) license
