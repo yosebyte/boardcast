@@ -6,13 +6,6 @@
   <p><strong>Lightweight and Minimalist Real-Time Collaborative Text Whiteboard</strong></p>
 </div>
 
-<div align="center">
-  <a href="#✨-features">Features</a> •
-  <a href="#📦-installation">Installation</a> •
-  <a href="#⚙️-configuration">Configuration</a> •
-  <a href="#🛠️-development">Development</a>
-</div>
-
 ## 📖 Overview
 
 BoardCast is a lightweight real-time collaborative whiteboard application developed in Go. It allows multiple users to authenticate via password and collaborate on editing text content in real-time on the same whiteboard. The application features a clean user interface, supports WebSocket real-time synchronization, and includes a built-in snapshot feature for saving and restoring content at any time, making it an ideal tool for team collaboration, meeting notes, and brainstorming.
