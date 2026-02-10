@@ -55,8 +55,14 @@ function App() {
   const activeTab = tabs.find(t => t.id === activeTabId)
 
   const connectWebSocket = useCallback(() => {
+    const token = localStorage.getItem('token')
+    if (!token) {
+      setAuthenticated(false)
+      return
+    }
+
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const ws = new WebSocket(`${protocol}//${window.location.host}/api/ws`)
+    const ws = new WebSocket(`${protocol}//${window.location.host}/api/ws?token=${token}`)
 
     ws.onopen = () => {
       console.log('WebSocket connected')
@@ -205,11 +211,19 @@ function App() {
 
   const loadHistory = async () => {
     try {
-      const response = await fetch(`/api/history?tabId=${activeTabId}`)
+      const token = localStorage.getItem('token')
+      const response = await fetch(`/api/history?tabId=${activeTabId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
       if (response.ok) {
         const data = await response.json()
         setHistory(data || [])
         setShowHistory(true)
+      } else if (response.status === 401) {
+        localStorage.removeItem('token')
+        setAuthenticated(false)
       }
     } catch (err) {
       console.error('Failed to load history:', err)
@@ -230,11 +244,19 @@ function App() {
 
   const loadSnapshots = async () => {
     try {
-      const response = await fetch('/api/snapshots')
+      const token = localStorage.getItem('token')
+      const response = await fetch('/api/snapshots', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
       if (response.ok) {
         const data = await response.json()
         setSnapshots(data || [])
         setShowSnapshots(true)
+      } else if (response.status === 401) {
+        localStorage.removeItem('token')
+        setAuthenticated(false)
       }
     } catch (err) {
       console.error('Failed to load snapshots:', err)
@@ -248,10 +270,12 @@ function App() {
     }
 
     try {
+      const token = localStorage.getItem('token')
       const response = await fetch('/api/snapshots', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           name: snapshotName,
@@ -264,6 +288,9 @@ function App() {
         setSnapshotDesc('')
         loadSnapshots()
         alert('Snapshot created successfully!')
+      } else if (response.status === 401) {
+        localStorage.removeItem('token')
+        setAuthenticated(false)
       }
     } catch (err) {
       console.error('Failed to create snapshot:', err)
@@ -315,8 +342,12 @@ function App() {
     formData.append('image', file)
 
     try {
+      const token = localStorage.getItem('token')
       const response = await fetch('/api/upload', {
         method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
         body: formData,
       })
 
@@ -325,6 +356,9 @@ function App() {
         const imageMarkdown = `![${file.name}](${data.imageUrl})\n`
         const currentContent = activeTab?.content || ''
         handleEditorChange(currentContent + imageMarkdown)
+      } else if (response.status === 401) {
+        localStorage.removeItem('token')
+        setAuthenticated(false)
       }
     } catch (err) {
       console.error('Failed to upload image:', err)
@@ -353,6 +387,20 @@ function App() {
       handleImageUpload(files[0])
     }
   }
+
+  useEffect(() => {
+    // Check for existing token on mount
+    const token = localStorage.getItem('token')
+    if (token) {
+      setAuthenticated(true)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (authenticated && !wsRef.current) {
+      connectWebSocket()
+    }
+  }, [authenticated, connectWebSocket])
 
   useEffect(() => {
     document.addEventListener('paste', handlePaste)

@@ -326,7 +326,37 @@ func handleAuth(pwd string) http.HandlerFunc {
 	}
 }
 
+func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		authHeader := r.Header.Get("Authorization")
+		if authHeader == "" {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+		if err := verifyToken(tokenString); err != nil {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		next(w, r)
+	}
+}
+
 func handleWebSocket(hub *Hub, w http.ResponseWriter, r *http.Request) {
+	// Verify token from query parameter
+	token := r.URL.Query().Get("token")
+	if token == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	if err := verifyToken(token); err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println(err)
@@ -509,10 +539,10 @@ func main() {
 	mux.HandleFunc("/api/ws", func(w http.ResponseWriter, r *http.Request) {
 		handleWebSocket(hub, w, r)
 	})
-	mux.HandleFunc("/api/history", handleHistory(hub))
-	mux.HandleFunc("/api/snapshots", handleSnapshot(hub))
-	mux.HandleFunc("/api/upload", handleImageUpload(hub))
-	mux.HandleFunc("/api/images/", handleImageGet(hub))
+	mux.HandleFunc("/api/history", authMiddleware(handleHistory(hub)))
+	mux.HandleFunc("/api/snapshots", authMiddleware(handleSnapshot(hub)))
+	mux.HandleFunc("/api/upload", authMiddleware(handleImageUpload(hub)))
+	mux.HandleFunc("/api/images/", authMiddleware(handleImageGet(hub)))
 
 	// Serve static files
 	fs := http.FileServer(http.Dir("./web/build"))
