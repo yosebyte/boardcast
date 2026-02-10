@@ -1,8 +1,10 @@
-# BoardCast 💎
+# BoardCast
 
 A modern, real-time collaborative whiteboard application with Markdown support. Perfect for sharing notes, code snippets, and ideas across multiple sessions.
 
-## ✨ Features
+![BoardCast Demo](docs/demo.gif)
+
+## Features
 
 - **Real-time Sync**: WebSocket-based instant synchronization across all connected sessions
 - **Markdown Support**: Rich text editing with Markdown formatting and live preview
@@ -12,7 +14,18 @@ A modern, real-time collaborative whiteboard application with Markdown support. 
 - **Auto-Reconnect**: Automatic reconnection on connection loss
 - **Docker Ready**: Easy deployment with Docker and GHCR
 
-## 🚀 Quick Start
+## Screenshots
+
+### Login Screen
+![Login Screen](docs/screenshot-login.png)
+
+### Editor Mode
+![Editor Mode](docs/screenshot-editor.png)
+
+### Preview Mode
+![Preview Mode](docs/screenshot-preview.png)
+
+## Quick Start
 
 ### Using Docker (Recommended)
 
@@ -59,7 +72,7 @@ cd ..
 go run main.go --port 8080 --password your-password
 ```
 
-## 🛠️ Configuration
+## Configuration
 
 ### Command-line Options
 
@@ -80,7 +93,7 @@ docker run -p 3000:3000 ghcr.io/yosebyte/boardcast:latest \
   --port 3000 --password mysecret
 ```
 
-## 📖 Usage
+## Usage
 
 1. **Login**: Enter the configured password
 2. **Edit**: Type or paste content in the editor
@@ -108,7 +121,7 @@ console.log('Hello, BoardCast!');
 \`\`\`
 ```
 
-## 🏗️ Architecture
+## Architecture
 
 - **Backend**: Go + Gorilla WebSocket
 - **Frontend**: React + TypeScript + Vite
@@ -116,14 +129,14 @@ console.log('Hello, BoardCast!');
 - **Styling**: TailwindCSS
 - **Markdown**: react-markdown
 
-## 🔐 Security Notes
+## Security Notes
 
 - Single password authentication
 - CORS enabled for development
 - WebSocket connections are authenticated
 - Use HTTPS in production with a reverse proxy
 
-## 🧪 Development
+## Development
 
 ```bash
 # Terminal 1: Run backend
@@ -136,7 +149,7 @@ npm run dev
 
 Frontend dev server runs on `http://localhost:5173` with API proxy to backend.
 
-## 📦 Building
+## Building
 
 ### Binary
 
@@ -158,18 +171,10 @@ docker buildx build --platform linux/amd64,linux/arm64 \
   --push .
 ```
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
-## 📄 License
+## License
 
-MIT License - see LICENSE file for details
-
-## 🌟 Credits
-
-Created by [@yosebyte](https://github.com/yosebyte)
-
----
-
-**BoardCast** - Real-time collaborative whiteboard made simple 💎
+BSD-3-Clause License - see LICENSE file for details
