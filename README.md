@@ -14,7 +14,10 @@ A modern, real-time collaborative whiteboard application with Markdown support, 
 
 ### Security & Authentication
 - **Enhanced Password Security**: Support for environment variables and password files
-- **JWT Token Authentication**: Session-based authentication with token expiration
+- **Session Cookie Authentication**: HTTP-only cookies for secure session management
+- **Server-Side Sessions**: All sessions validated and managed on backend
+- **Automatic Cleanup**: Expired sessions removed automatically
+- **Logout Functionality**: Proper session termination with logout button
 - **Secure Configuration**: No password exposure in command-line arguments
 
 ### Data Management
@@ -39,7 +42,7 @@ A modern, real-time collaborative whiteboard application with Markdown support, 
 
 ### Login Screen
 ![Login Screen](docs/screenshot-login.png)
-*Secure password-based authentication with JWT tokens*
+*Secure password-based authentication with HTTP-only session cookies*
 
 ### History Tracking
 ![History Feature](docs/screenshot-history.png)
@@ -48,6 +51,10 @@ A modern, real-time collaborative whiteboard application with Markdown support, 
 ### Snapshot Management
 ![Snapshot Feature](docs/screenshot-snapshots.png)
 *Create named snapshots and restore entire workspace with one click*
+
+### Two-Line Interface
+![Interface](docs/screenshot-interface.png)
+*Clean two-line header: Status bar (connection + logout) and Action bar (all features)*
 
 ### Preview Mode
 ![Preview Mode](docs/screenshot-preview.png)
