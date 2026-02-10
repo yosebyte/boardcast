@@ -49,6 +49,7 @@ function App() {
   const [snapshotName, setSnapshotName] = useState('')
   const [snapshotDesc, setSnapshotDesc] = useState('')
   const wsRef = useRef<WebSocket | null>(null)
+  const reconnectTimerRef = useRef<NodeJS.Timeout | null>(null)
   const editorRef = useRef<any>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -75,6 +76,11 @@ function App() {
   }, [])
 
   const connectWebSocket = useCallback(() => {
+    // Don't connect if already connected
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      return
+    }
+
     // Close existing connection if any
     if (wsRef.current) {
       wsRef.current.close()
@@ -88,14 +94,20 @@ function App() {
       console.log('WebSocket connected')
       setConnected(true)
       setError('')
+      // Clear any reconnect timer
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current)
+        reconnectTimerRef.current = null
+      }
     }
 
     ws.onmessage = (event) => {
       const msg: Message = JSON.parse(event.data)
+      console.log('WebSocket message:', msg)
       
       if (msg.type === 'init' && msg.tabs) {
         setTabs(msg.tabs)
-        if (msg.tabs.length > 0 && (!activeTabId || activeTabId === 'default')) {
+        if (msg.tabs.length > 0) {
           setActiveTabId(msg.tabs[0].id)
         }
       } else if (msg.type === 'update' && msg.tabId) {
@@ -129,18 +141,46 @@ function App() {
     ws.onclose = () => {
       console.log('WebSocket disconnected')
       setConnected(false)
-      // Only reconnect if we're still authenticated and not manually closing
-      if (authenticated && wsRef.current === ws) {
-        setTimeout(() => {
-          if (authenticated) {
-            connectWebSocket()
-          }
-        }, 3000)
-      }
+      wsRef.current = null
     }
 
     wsRef.current = ws
-  }, [authenticated])
+  }, [activeTabId])
+
+  // Auto-reconnect logic
+  useEffect(() => {
+    if (!authenticated) {
+      return
+    }
+
+    if (!connected && !wsRef.current) {
+      // Try to reconnect
+      reconnectTimerRef.current = setTimeout(() => {
+        console.log('Attempting to reconnect...')
+        connectWebSocket()
+      }, 3000)
+    }
+
+    return () => {
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current)
+      }
+    }
+  }, [authenticated, connected, connectWebSocket])
+
+  // Connect WebSocket when authenticated
+  useEffect(() => {
+    if (authenticated && !wsRef.current) {
+      connectWebSocket()
+    }
+
+    return () => {
+      if (!authenticated && wsRef.current) {
+        wsRef.current.close()
+        wsRef.current = null
+      }
+    }
+  }, [authenticated, connectWebSocket])
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -158,7 +198,6 @@ function App() {
 
       if (response.ok) {
         setAuthenticated(true)
-        connectWebSocket()
       } else {
         setError('Invalid password')
       }
@@ -179,10 +218,15 @@ function App() {
         wsRef.current = null
       }
       
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current)
+        reconnectTimerRef.current = null
+      }
+      
       setAuthenticated(false)
       setConnected(false)
       setTabs([])
-      setPassword('') // Clear password
+      setPassword('')
       setActiveTabId('default')
     } catch (err) {
       console.error('Logout failed:', err)
@@ -204,6 +248,7 @@ function App() {
   }
 
   const createNewTab = () => {
+    console.log('Creating new tab, ws state:', wsRef.current?.readyState)
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       const newId = `tab-${Date.now()}`
       const msg: Message = {
@@ -211,7 +256,10 @@ function App() {
         tabId: newId,
         name: `Tab ${tabs.length + 1}`,
       }
+      console.log('Sending create message:', msg)
       wsRef.current.send(JSON.stringify(msg))
+    } else {
+      alert('Not connected to server. Please wait...')
     }
   }
 
@@ -416,20 +464,13 @@ function App() {
   }
 
   useEffect(() => {
-    checkAuth().then(isAuth => {
-      if (isAuth) {
-        connectWebSocket()
-      }
-    })
-  }, [])
+    checkAuth()
+  }, [checkAuth])
 
   useEffect(() => {
     document.addEventListener('paste', handlePaste)
     return () => {
       document.removeEventListener('paste', handlePaste)
-      if (wsRef.current) {
-        wsRef.current.close()
-      }
     }
   }, [activeTab])
 
