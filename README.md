@@ -284,9 +284,9 @@ data/
 ```
 boardcast/
 ├── cmd/
-│   └── boardcast/          # Application entry point
-│       ├── main.go         # Server, routing, WebSocket
-│       └── storage.go      # SQLite database layer
+│   └── boardcast/         # Application entry point
+│       ├── main.go        # Server, routing, WebSocket
+│       └── storage.go     # SQLite database layer
 ├── web/
 │   ├── src/
 │   │   ├── App.tsx        # React main component
@@ -303,6 +303,7 @@ boardcast/
 │   └── workflows/
 │       └── release.yml    # CI/CD pipeline
 ├── go.mod                 # Go dependencies
+├── go.sum                 # Go dependency checksums
 ├── Dockerfile             # Multi-stage build
 ├── LICENSE                # BSD-3-Clause
 └── README.md              # This file
@@ -375,7 +376,3 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ## License
 
 BSD-3-Clause License - see LICENSE file for details
-
----
-
-For release notes and version history, see [Releases](https://github.com/yosebyte/boardcast/releases).
