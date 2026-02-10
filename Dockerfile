@@ -9,10 +9,10 @@ RUN npm run build
 # Build backend
 FROM golang:1.21-alpine AS backend-builder
 WORKDIR /app
-COPY go.mod ./
-COPY *.go ./
-RUN go mod tidy && go mod download
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o boardcast .
+COPY go.mod go.sum* ./
+RUN go mod download
+COPY cmd/ ./cmd/
+RUN CGO_ENABLED=0 GOOS=linux go build -o boardcast ./cmd/boardcast
 
 # Final stage
 FROM alpine:latest

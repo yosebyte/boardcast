@@ -41,10 +41,6 @@ A modern, real-time collaborative whiteboard application with Markdown support, 
 ![Login Screen](docs/screenshot-login.png)
 *Secure password-based authentication with JWT tokens*
 
-### Editor Mode with New Features
-![Editor Mode](docs/screenshot-editor.png)
-*Multi-tab interface with Upload Image, History, Snapshots, Preview, and Clear buttons*
-
 ### History Tracking
 ![History Feature](docs/screenshot-history.png)
 *Browse and restore from complete edit history with timestamps*
@@ -121,7 +117,7 @@ cd ..
 
 # Run server with environment variable
 export BOARDCAST_PASSWORD=your-secure-password
-go run main.go
+go run ./cmd/boardcast
 ```
 
 ## Configuration
@@ -283,10 +279,41 @@ data/
 
 ## Development
 
+### Project Structure
+
+```
+boardcast/
+├── cmd/
+│   └── boardcast/          # Application entry point
+│       ├── main.go         # Server, routing, WebSocket
+│       └── storage.go      # SQLite database layer
+├── web/
+│   ├── src/
+│   │   ├── App.tsx        # React main component
+│   │   ├── main.tsx       # Entry point
+│   │   └── index.css      # Tailwind styles
+│   ├── public/            # Static assets
+│   ├── package.json       # Node dependencies
+│   └── vite.config.ts     # Build configuration
+├── docs/
+│   ├── demo.png           # Main demo screenshot
+│   ├── screenshot-*.png   # Feature screenshots
+│   └── README.md          # Screenshots metadata
+├── .github/
+│   └── workflows/
+│       └── release.yml    # CI/CD pipeline
+├── go.mod                 # Go dependencies
+├── Dockerfile             # Multi-stage build
+├── LICENSE                # BSD-3-Clause
+└── README.md              # This file
+```
+
+### Local Development
+
 ```bash
 # Terminal 1: Run backend with hot reload
 export BOARDCAST_PASSWORD=dev
-go run main.go --data-dir ./dev-data
+go run ./cmd/boardcast --data-dir ./dev-data
 
 # Terminal 2: Run frontend dev server
 cd web
@@ -295,23 +322,25 @@ npm run dev
 
 Frontend dev server runs on `http://localhost:5173` with API proxy to backend.
 
-## Building
-
-### Binary
+### Building from Source
 
 ```bash
-go build -o boardcast main.go storage.go
+# Build backend binary
+go build -o boardcast ./cmd/boardcast
+
+# Build frontend
+cd web
+npm install
+npm run build
 ```
 
-### Docker Image
+### Docker Build
 
 ```bash
+# Local build
 docker build -t boardcast:latest .
-```
 
-### Multi-platform Docker Image
-
-```bash
+# Multi-platform build
 docker buildx build --platform linux/amd64,linux/arm64 \
   -t ghcr.io/yosebyte/boardcast:latest \
   --push .
@@ -347,26 +376,6 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 BSD-3-Clause License - see LICENSE file for details
 
-## Changelog
+---
 
-### v1.2.0 (2024-02-10)
-- **Security**: Enhanced password management (env vars, password files, JWT tokens)
-- **History**: Complete edit history tracking with auto-save
-- **Snapshots**: Create and restore full workspace snapshots
-- **Images**: Drag & drop, paste, and upload image support
-- **Storage**: SQLite persistent database for tabs, history, snapshots, and images
-- **Auto-save**: Automatic history snapshots every 5 minutes
-- **Improved**: Better security best practices and configuration options
-
-### v1.1.0 (2024-02-10)
-- Added multi-tab/page support for better content organization
-- Tab management features (create, rename, delete, switch)
-- Improved real-time synchronization across tabs
-- Enhanced UI with tab bar
-
-### v1.0.0 (2024-02-10)
-- Initial release
-- Real-time WebSocket synchronization
-- Markdown editor with Monaco
-- Password-protected access
-- Docker multi-platform support
+For release notes and version history, see [Releases](https://github.com/yosebyte/boardcast/releases).
