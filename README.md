@@ -1,149 +1,79 @@
 # BoardCast
 
-A modern, real-time collaborative Markdown whiteboard with split-view editing. Built for teams, documentation, and content collaboration.
+A lightweight, real-time collaborative markdown editor with multi-tab support and persistent storage.
 
 ## Features
 
-### Editor
-- **VS Code Monaco Editor**: Professional code editor with syntax highlighting
-- **Split View**: Side-by-side raw markdown and rendered preview
-- **Real-time Sync**: WebSocket-based instant synchronization across all sessions
-- **Multi-Tab Support**: Organize content with multiple tabs
-- **Smooth Performance**: Debounced updates for lag-free typing
-
-### Markdown
-- **GitHub Flavored Markdown**: Full GFM support with remark-gfm
-- **Beautiful Rendering**: Tailwind Typography for professional styling
-- **Live Preview**: See changes instantly in the preview pane
-- **Formatting Support**: Headers, lists, code blocks, tables, and more
-
-### Security
-- **Session Cookie Authentication**: HTTP-only cookies for secure sessions
-- **Environment Variables**: Password via `BOARDCAST_PASSWORD`
-- **Password Files**: Read from secure file paths
-- **Auto-Expiry**: 24-hour session timeout
-- **No Command-line Exposure**: Passwords never in process lists
-
-### Storage
-- **SQLite Database**: Persistent storage for all content
-- **Multi-Tab Persistence**: All tabs saved automatically
-- **Data Volume**: Docker volume support for data portability
-- **Auto-Save**: Content synced every 500ms (debounced)
-
-## Screenshots
-
-### Split View Editor
-![Split View](docs/screenshot-interface.png)
-*VS Code-style split view: Raw markdown editor on the left, rendered preview on the right*
-
-### Login
-![Login Screen](docs/screenshot-login.png)
-*Secure authentication with session cookies*
-
-### Preview
-![Preview Mode](docs/screenshot-preview.png)
-*Beautiful markdown rendering with Tailwind Typography*
+- **Real-time Collaboration**: WebSocket-based synchronization across multiple clients
+- **Multi-Tab Workspace**: Create, rename, and manage multiple tabs
+- **Persistent Storage**: SQLite database for reliable data persistence
+- **Theme Switching**: System, Light, and Dark modes with full UI adaptation
+- **Adjustable Font Size**: Customize editor font size (10-32px)
+- **Monaco Editor**: Professional code editor with syntax highlighting and line numbers
+- **Session-based Authentication**: Secure HTTP-only cookie authentication
+- **Automatic Reconnection**: Seamless reconnection on connection loss
+- **Optimized Input**: Debounced updates and cursor position preservation for smooth typing
 
 ## Quick Start
 
-### Docker (Recommended)
+### Docker Deployment
 
 ```bash
-docker run -d -p 8080:8080 \
+docker run -d \
+  -p 8080:8080 \
   -e BOARDCAST_PASSWORD=your-secure-password \
   -v boardcast-data:/app/data \
   ghcr.io/yosebyte/boardcast:latest
 ```
 
-Visit `http://localhost:8080` and enter your password.
+### Environment Variables
+
+- `BOARDCAST_PASSWORD` - Authentication password (required)
+- `BOARDCAST_PASSWORD_FILE` - Path to password file (alternative to BOARDCAST_PASSWORD)
+- `BOARDCAST_DATA_DIR` - Data directory path (default: `./data`)
+- `BOARDCAST_PORT` - HTTP server port (default: `8080`)
+
+### Using Password File
+
+```bash
+# Create password file
+echo "your-secure-password" > /path/to/password.txt
+chmod 600 /path/to/password.txt
+
+# Run with password file
+docker run -d \
+  -p 8080:8080 \
+  -v /path/to/password.txt:/secrets/password:ro \
+  -v boardcast-data:/app/data \
+  -e BOARDCAST_PASSWORD_FILE=/secrets/password \
+  ghcr.io/yosebyte/boardcast:latest
+```
 
 ### Docker Compose
 
 ```yaml
 version: '3.8'
+
 services:
   boardcast:
     image: ghcr.io/yosebyte/boardcast:latest
     ports:
       - "8080:8080"
     environment:
-      - BOARDCAST_PASSWORD=your-secure-password
+      BOARDCAST_PASSWORD: your-secure-password
+      # Or use password file:
+      # BOARDCAST_PASSWORD_FILE: /secrets/password
     volumes:
       - boardcast-data:/app/data
+      # If using password file:
+      # - ./password.txt:/secrets/password:ro
     restart: unless-stopped
 
 volumes:
   boardcast-data:
 ```
 
-## Configuration
-
-### Password Options
-
-**Environment Variable (Recommended):**
-```bash
-docker run -d -p 8080:8080 \
-  -e BOARDCAST_PASSWORD=mysecretpass \
-  -v boardcast-data:/app/data \
-  ghcr.io/yosebyte/boardcast:latest
-```
-
-**Password File (Most Secure):**
-```bash
-echo "mysecretpass" > /path/to/password.txt
-docker run -d -p 8080:8080 \
-  -v /path/to/password.txt:/run/secrets/password:ro \
-  -v boardcast-data:/app/data \
-  ghcr.io/yosebyte/boardcast:latest \
-  --password-file /run/secrets/password
-```
-
-### Data Directory
-
-Default: `/app/data`
-
-Change with `--data-dir`:
-```bash
-docker run -d -p 8080:8080 \
-  -e BOARDCAST_PASSWORD=pass \
-  -v boardcast-data:/custom/path \
-  ghcr.io/yosebyte/boardcast:latest \
-  --data-dir /custom/path
-```
-
-## Usage
-
-### Tabs
-- **Create**: Click "+ New Tab" button
-- **Rename**: Hover over tab, click edit icon, enter new name
-- **Delete**: Hover over tab, click X icon
-- **Switch**: Click on any tab to switch
-
-### Preview
-- **Toggle**: Click "Show/Hide Preview" button in top right
-- **Split View**: See raw markdown and rendered output side-by-side
-- **Full Width**: Hide preview to use full width for editing
-
-### Markdown
-Supports GitHub Flavored Markdown (GFM):
-- Headers: `# H1`, `## H2`, etc.
-- **Bold**: `**text**`
-- *Italic*: `*text*`
-- Lists: `-` or `1.`
-- Code: `` `inline` `` or ` ```block``` `
-- Links: `[text](url)`
-- Images: `![alt](url)`
-- Tables: `| col | col |`
-- Task lists: `- [ ]` and `- [x]`
-
-## Development
-
-### Prerequisites
-- Go 1.21+
-- Node.js 18+
-- npm or yarn
-
-### Build from Source
+### Manual Build and Run
 
 ```bash
 # Clone repository
@@ -154,92 +84,113 @@ cd boardcast
 cd web
 npm install
 npm run build
-
-# Build backend
 cd ..
+
+# Build and run backend
 go build -o boardcast ./cmd/boardcast
-
-# Run
-./boardcast --password=mypass --data-dir=./data
+BOARDCAST_PASSWORD=your-password ./boardcast
 ```
 
-### Development Mode
+## Usage
 
-```bash
-# Terminal 1: Backend
-go run ./cmd/boardcast --password=dev --data-dir=./dev-data
-
-# Terminal 2: Frontend
-cd web
-npm run dev
-```
+1. Open http://localhost:8080 in your browser
+2. Enter your password to authenticate
+3. Start editing:
+   - Create new tabs with the "+ New Tab" button
+   - Switch between tabs in the sidebar
+   - Rename tabs by clicking the edit icon
+   - Delete tabs by clicking the delete icon (minimum 1 tab required)
+4. Adjust preferences:
+   - Click the +/- buttons to increase/decrease font size
+   - Click the theme button to cycle between System/Light/Dark modes
+5. Your changes are automatically saved and synced across all connected clients
 
 ## Architecture
 
+### Backend (Go)
+
+- **HTTP Server**: Serves static files and handles API requests
+- **WebSocket Server**: Real-time bidirectional communication
+- **Session Management**: Server-side sessions with HTTP-only cookies
+- **Storage**: SQLite database with automatic schema initialization
+
+**Database Schema:**
+- `tabs`: Store tab content with unique IDs, names, and timestamps
+
+### Frontend (React + TypeScript)
+
+- **Monaco Editor**: VS Code's editor component for professional editing experience
+- **WebSocket Client**: Manages real-time synchronization with automatic reconnection
+- **State Management**: React hooks for efficient state updates
+- **Theme System**: CSS variables and Tailwind classes for consistent theming
+- **Input Optimization**: Cursor position preservation and debounced updates
+
+## Security
+
+- **Authentication**: Password-based authentication with session cookies
+- **HTTP-only Cookies**: Prevents XSS attacks by making cookies inaccessible to JavaScript
+- **Session Expiration**: Automatic session cleanup (24-hour expiration)
+- **Password Options**: Environment variable or secure file-based password storage
+- **CORS**: Configured for same-origin requests only
+
+## Data Persistence
+
+All data is stored in SQLite database at the configured data directory (default: `./data`).
+
+**Backup:**
+```bash
+# Stop container
+docker stop boardcast
+
+# Backup data volume
+docker run --rm -v boardcast-data:/data -v $(pwd):/backup alpine tar czf /backup/boardcast-backup.tar.gz -C /data .
+
+# Restart container
+docker start boardcast
 ```
-boardcast/
-├── cmd/
-│   └── boardcast/
-│       ├── main.go      # HTTP server, WebSocket, auth
-│       └── storage.go   # SQLite database layer
-├── web/
-│   ├── src/
-│   │   └── App.tsx      # React UI with Monaco Editor
-│   ├── package.json
-│   └── vite.config.ts
-├── Dockerfile           # Multi-stage, multi-platform build
-└── go.mod
+
+**Restore:**
+```bash
+# Stop container
+docker stop boardcast
+
+# Restore data volume
+docker run --rm -v boardcast-data:/data -v $(pwd):/backup alpine tar xzf /backup/boardcast-backup.tar.gz -C /data
+
+# Restart container
+docker start boardcast
 ```
 
-## Technology Stack
+## Development
 
-- **Backend**: Go 1.21, Gorilla WebSocket, SQLite (modernc.org)
-- **Frontend**: React 18, TypeScript, Monaco Editor, ReactMarkdown
-- **Styling**: TailwindCSS 3, Tailwind Typography
-- **Build**: Vite (frontend), Docker multi-stage (both)
-- **Markdown**: remark-gfm for GitHub Flavored Markdown
+### Requirements
 
-## Security Best Practices
+- Go 1.20+
+- Node.js 18+
+- npm or yarn
 
-1. **Use Environment Variables**: Never pass passwords via command line
-2. **Use Password Files**: Even better, read from a secure file
-3. **HTTPs**: Use a reverse proxy (nginx, Caddy) with SSL in production
-4. **Firewall**: Restrict access to port 8080
-5. **Backups**: Regularly backup the data volume
-6. **Updates**: Keep Docker images up to date
+### Local Development
 
-## Performance
+```bash
+# Terminal 1: Backend
+go run ./cmd/boardcast
 
-- **Debounced Updates**: 500ms delay reduces WebSocket traffic
-- **Immediate UI**: Local state updates for smooth typing
-- **Optimized Rendering**: Only re-render changed components
-- **Persistent Connection**: Auto-reconnect on network issues
+# Terminal 2: Frontend
+cd web
+npm install
+npm run dev
+```
 
-## Troubleshooting
-
-### Cannot Connect
-- Check if server is running: `docker ps`
-- Check logs: `docker logs boardcast`
-- Verify password is correct
-
-### Data Not Persisting
-- Ensure volume is mounted: `docker inspect boardcast | grep Mounts`
-- Check data directory permissions
-- Verify SQLite database exists in volume
-
-### Connection Keeps Dropping
-- Check network stability
-- Verify firewall isn't blocking WebSocket
-- Check server logs for errors
+Frontend dev server runs on http://localhost:5173 and proxies API requests to the backend on port 8080.
 
 ## License
 
-BSD 3-Clause License
+BSD-3-Clause License
 
 Copyright (c) 2026, Mikyla
 
 ## Links
 
-- **GitHub**: https://github.com/yosebyte/boardcast
-- **Docker**: https://github.com/yosebyte/boardcast/pkgs/container/boardcast
-- **Issues**: https://github.com/yosebyte/boardcast/issues
+- Repository: https://github.com/yosebyte/boardcast
+- Docker Images: https://github.com/yosebyte/boardcast/pkgs/container/boardcast
+- Issues: https://github.com/yosebyte/boardcast/issues

@@ -1,7 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import Editor from '@monaco-editor/react'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
 
 interface Tab {
   id: string
@@ -25,11 +23,14 @@ function App() {
   const [password, setPassword] = useState('')
   const [tabs, setTabs] = useState<Tab[]>([])
   const [activeTabId, setActiveTabId] = useState<string>('default')
-  const [showPreview, setShowPreview] = useState(true)
   const [connected, setConnected] = useState(false)
   const [error, setError] = useState('')
   const [editingTabId, setEditingTabId] = useState<string | null>(null)
   const [editingTabName, setEditingTabName] = useState('')
+  const [fontSize, setFontSize] = useState(() => {
+    const saved = localStorage.getItem('fontSize')
+    return saved ? parseInt(saved) : 14
+  })
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
     const saved = localStorage.getItem('theme')
     return (saved as ThemeMode) || 'system'
@@ -38,6 +39,7 @@ function App() {
   const reconnectTimerRef = useRef<NodeJS.Timeout | null>(null)
   const editorRef = useRef<any>(null)
   const updateTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const isLocalUpdateRef = useRef(false)
 
   // Get effective theme based on mode and system preference
   const getEffectiveTheme = useCallback(() => {
@@ -67,6 +69,18 @@ function App() {
     const nextMode = modes[(currentIndex + 1) % modes.length]
     setThemeMode(nextMode)
     localStorage.setItem('theme', nextMode)
+  }
+
+  const increaseFontSize = () => {
+    const newSize = Math.min(fontSize + 2, 32)
+    setFontSize(newSize)
+    localStorage.setItem('fontSize', newSize.toString())
+  }
+
+  const decreaseFontSize = () => {
+    const newSize = Math.max(fontSize - 2, 10)
+    setFontSize(newSize)
+    localStorage.setItem('fontSize', newSize.toString())
   }
 
   const getThemeIcon = () => {
@@ -144,9 +158,12 @@ function App() {
           setActiveTabId(msg.tabs[0].id)
         }
       } else if (msg.type === 'update' && msg.tabId) {
-        setTabs(prev => prev.map(tab =>
-          tab.id === msg.tabId ? { ...tab, content: msg.content || '' } : tab
-        ))
+        // Don't update if user is currently editing this tab
+        if (!isLocalUpdateRef.current || msg.tabId !== activeTabId) {
+          setTabs(prev => prev.map(tab =>
+            tab.id === msg.tabId ? { ...tab, content: msg.content || '' } : tab
+          ))
+        }
       } else if (msg.type === 'create' && msg.tabId && msg.name) {
         setTabs(prev => [...prev, { id: msg.tabId, name: msg.name, content: '' }])
         setActiveTabId(msg.tabId)
@@ -258,14 +275,32 @@ function App() {
     }
   }
 
-  // Debounced update to reduce WebSocket messages
+  // Debounced update to reduce WebSocket messages and prevent cursor jumping
   const handleEditorChange = (value: string | undefined) => {
     if (value === undefined) return
+
+    // Save cursor position
+    const editor = editorRef.current
+    const position = editor?.getPosition()
+    const scrollTop = editor?.getScrollTop()
+
+    // Mark as local update to prevent WebSocket echo
+    isLocalUpdateRef.current = true
 
     // Update local state immediately for smooth typing
     setTabs(prev => prev.map(tab =>
       tab.id === activeTabId ? { ...tab, content: value } : tab
     ))
+
+    // Restore cursor position after state update
+    requestAnimationFrame(() => {
+      if (editor && position) {
+        editor.setPosition(position)
+        if (scrollTop !== undefined) {
+          editor.setScrollTop(scrollTop)
+        }
+      }
+    })
 
     // Debounce WebSocket updates
     if (updateTimerRef.current) {
@@ -281,6 +316,10 @@ function App() {
         }
         wsRef.current.send(JSON.stringify(msg))
       }
+      // Allow WebSocket updates again after sending
+      setTimeout(() => {
+        isLocalUpdateRef.current = false
+      }, 100)
     }, 500) // 500ms debounce
   }
 
@@ -384,11 +423,11 @@ function App() {
   }
 
   return (
-    <div className={`h-screen flex flex-col ${effectiveTheme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'}`}>
+    <div className={`h-screen flex flex-col ${effectiveTheme === 'dark' ? 'bg-[#1e1e1e]' : 'bg-gray-50'}`}>
       {/* Top Header Bar */}
-      <div className={`${effectiveTheme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border-b px-6 py-3 flex items-center justify-between shadow-sm`}>
+      <div className={`${effectiveTheme === 'dark' ? 'bg-[#2d2d30] border-[#3e3e42]' : 'bg-white border-gray-200'} border-b px-6 py-3 flex items-center justify-between shadow-sm`}>
         <div className="flex items-center space-x-4">
-          <h1 className={`text-xl font-bold ${effectiveTheme === 'dark' ? 'text-white' : 'text-gray-800'}`}>BoardCast</h1>
+          <h1 className={`text-xl font-bold ${effectiveTheme === 'dark' ? 'text-gray-100' : 'text-gray-800'}`}>BoardCast</h1>
           <div className="flex items-center space-x-2">
             <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`} />
             <span className={`text-sm ${effectiveTheme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
@@ -397,23 +436,40 @@ function App() {
           </div>
         </div>
         
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-2">
           <button
-            onClick={() => setShowPreview(!showPreview)}
-            className={`px-4 py-2 rounded-lg font-medium transition text-sm ${
-              showPreview
-                ? 'bg-blue-600 text-white hover:bg-blue-700'
+            onClick={decreaseFontSize}
+            className={`p-2 rounded-lg transition ${
+              effectiveTheme === 'dark'
+                ? 'bg-[#3e3e42] text-gray-300 hover:bg-[#4e4e52]'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
+            title="Decrease font size"
           >
-            {showPreview ? 'Hide Preview' : 'Show Preview'}
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+            </svg>
+          </button>
+          
+          <button
+            onClick={increaseFontSize}
+            className={`p-2 rounded-lg transition ${
+              effectiveTheme === 'dark'
+                ? 'bg-[#3e3e42] text-gray-300 hover:bg-[#4e4e52]'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+            title="Increase font size"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
           </button>
           
           <button
             onClick={cycleTheme}
             className={`p-2 rounded-lg transition ${
               effectiveTheme === 'dark'
-                ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                ? 'bg-[#3e3e42] text-gray-300 hover:bg-[#4e4e52]'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
             title={`Theme: ${themeMode} (click to cycle)`}
@@ -423,13 +479,16 @@ function App() {
           
           <button
             onClick={handleLogout}
-            className={`px-4 py-2 rounded-lg font-medium transition text-sm ${
+            className={`p-2 rounded-lg transition ${
               effectiveTheme === 'dark'
-                ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                ? 'bg-[#3e3e42] text-gray-300 hover:bg-[#4e4e52]'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
+            title="Logout"
           >
-            Logout
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
           </button>
         </div>
       </div>
@@ -440,7 +499,7 @@ function App() {
           {/* Sidebar */}
           <div className={`w-64 border-r overflow-y-auto ${
             effectiveTheme === 'dark' 
-              ? 'bg-gray-800 border-gray-700' 
+              ? 'bg-[#252526] border-[#3e3e42]' 
               : 'bg-white border-gray-200'
           }`}>
             <div className="p-4">
@@ -458,10 +517,10 @@ function App() {
                     className={`group relative p-3 rounded-lg cursor-pointer transition ${
                       activeTabId === tab.id
                         ? effectiveTheme === 'dark'
-                          ? 'bg-blue-900 border-2 border-blue-500'
+                          ? 'bg-[#37373d] border-2 border-blue-500'
                           : 'bg-blue-50 border-2 border-blue-500'
                         : effectiveTheme === 'dark'
-                          ? 'bg-gray-700 border-2 border-transparent hover:bg-gray-600'
+                          ? 'bg-[#2d2d30] border-2 border-transparent hover:bg-[#37373d]'
                           : 'bg-gray-50 border-2 border-transparent hover:bg-gray-100'
                     }`}
                     onClick={() => setActiveTabId(tab.id)}
@@ -525,77 +584,56 @@ function App() {
             </div>
           </div>
 
-          {/* Editor and Preview Area */}
-          <div className="flex-1 flex overflow-hidden">
-            {/* Editor */}
-            <div className="flex-1 border-r border-gray-200">
-              <Editor
-                key={activeTabId}
-                height="100%"
-                defaultLanguage="markdown"
-                value={activeTab?.content || ''}
-                onChange={handleEditorChange}
-                theme={effectiveTheme === 'dark' ? 'vs-dark' : 'vs-light'}
-                options={{
-                  fontSize: 14,
-                  wordWrap: 'on',
-                  minimap: { enabled: false },
-                  lineNumbers: 'on',
-                  lineNumbersMinChars: 3,
-                  scrollBeyondLastLine: false,
-                  automaticLayout: true,
-                  glyphMargin: false,
-                  folding: false,
-                }}
-                onMount={(editor) => {
-                  editorRef.current = editor
-                }}
-              />
-            </div>
-
-            {/* Preview */}
-            {showPreview && (
-              <div className={`flex-1 overflow-auto p-8 ${
-                effectiveTheme === 'dark' ? 'bg-gray-900' : 'bg-white'
-              }`}>
-                <div className={`max-w-4xl mx-auto prose prose-lg ${
-                  effectiveTheme === 'dark' ? 'prose-invert' : 'prose-slate'
-                }`}>
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {activeTab?.content || ''}
-                  </ReactMarkdown>
-                </div>
-              </div>
-            )}
+          {/* Editor */}
+          <div className="flex-1">
+            <Editor
+              key={activeTabId}
+              height="100%"
+              defaultLanguage="markdown"
+              value={activeTab?.content || ''}
+              onChange={handleEditorChange}
+              theme={effectiveTheme === 'dark' ? 'vs-dark' : 'vs-light'}
+              options={{
+                fontSize: fontSize,
+                wordWrap: 'on',
+                minimap: { enabled: false },
+                lineNumbers: 'on',
+                lineNumbersMinChars: 3,
+                scrollBeyondLastLine: false,
+                automaticLayout: true,
+                glyphMargin: false,
+                folding: false,
+                quickSuggestions: false,
+                suggestOnTriggerCharacters: false,
+                acceptSuggestionOnEnter: 'off',
+                tabCompletion: 'off',
+                wordBasedSuggestions: false,
+                parameterHints: { enabled: false },
+                snippetSuggestions: 'none',
+                renderWhitespace: 'none',
+                renderLineHighlight: 'line',
+              }}
+              onMount={(editor) => {
+                editorRef.current = editor
+              }}
+            />
           </div>
         </div>
 
         {/* Bottom Status Bar */}
         <div className={`border-t px-6 py-2 flex items-center justify-between text-sm ${
           effectiveTheme === 'dark'
-            ? 'bg-gray-800 border-gray-700 text-gray-300'
-            : 'bg-white border-gray-200 text-gray-600'
+            ? 'bg-[#007acc] border-[#007acc] text-white'
+            : 'bg-blue-600 border-blue-600 text-white'
         }`}>
           <div className="flex items-center space-x-4">
             <span>Tab: {activeTab?.name || 'None'}</span>
             <span>Lines: {(activeTab?.content?.split('\n').length || 0)}</span>
             <span>Characters: {activeTab?.content?.length || 0}</span>
           </div>
-          <a 
-            href="https://github.com/yosebyte/boardcast" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className={`flex items-center space-x-1 ${
-              effectiveTheme === 'dark'
-                ? 'text-blue-400 hover:text-blue-300'
-                : 'text-blue-600 hover:text-blue-800'
-            }`}
-          >
-            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.840 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.430.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
-            </svg>
-            <span>GitHub</span>
-          </a>
+          <div className="flex items-center space-x-2">
+            <span>Font: {fontSize}px</span>
+          </div>
         </div>
       </div>
     </div>
