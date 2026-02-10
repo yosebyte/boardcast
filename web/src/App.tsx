@@ -33,12 +33,12 @@ interface Message {
 
 function App() {
   const [authenticated, setAuthenticated] = useState(false)
+  const [checking, setChecking] = useState(true)
   const [password, setPassword] = useState('')
   const [tabs, setTabs] = useState<Tab[]>([])
   const [activeTabId, setActiveTabId] = useState<string>('default')
   const [previewMode, setPreviewMode] = useState(false)
   const [connected, setConnected] = useState(false)
-  const [activeUsers, setActiveUsers] = useState(1)
   const [error, setError] = useState('')
   const [editingTabId, setEditingTabId] = useState<string | null>(null)
   const [editingTabName, setEditingTabName] = useState('')
@@ -54,15 +54,29 @@ function App() {
 
   const activeTab = tabs.find(t => t.id === activeTabId)
 
-  const connectWebSocket = useCallback(() => {
-    const token = localStorage.getItem('token')
-    if (!token) {
+  const checkAuth = useCallback(async () => {
+    try {
+      const response = await fetch('/api/auth', {
+        credentials: 'include'
+      })
+      if (response.ok) {
+        setAuthenticated(true)
+        return true
+      } else {
+        setAuthenticated(false)
+        return false
+      }
+    } catch (err) {
       setAuthenticated(false)
-      return
+      return false
+    } finally {
+      setChecking(false)
     }
+  }, [])
 
+  const connectWebSocket = useCallback(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const ws = new WebSocket(`${protocol}//${window.location.host}/api/ws?token=${token}`)
+    const ws = new WebSocket(`${protocol}//${window.location.host}/api/ws`)
 
     ws.onopen = () => {
       console.log('WebSocket connected')
@@ -75,7 +89,7 @@ function App() {
       
       if (msg.type === 'init' && msg.tabs) {
         setTabs(msg.tabs)
-        if (msg.tabs.length > 0 && !activeTabId) {
+        if (msg.tabs.length > 0 && (!activeTabId || activeTabId === 'default')) {
           setActiveTabId(msg.tabs[0].id)
         }
       } else if (msg.type === 'update' && msg.tabId) {
@@ -129,12 +143,11 @@ function App() {
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify({ password }),
       })
 
       if (response.ok) {
-        const data = await response.json()
-        localStorage.setItem('token', data.token)
         setAuthenticated(true)
         connectWebSocket()
       } else {
@@ -142,6 +155,25 @@ function App() {
       }
     } catch (err) {
       setError('Connection failed')
+    }
+  }
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth', {
+        method: 'DELETE',
+        credentials: 'include'
+      })
+      
+      if (wsRef.current) {
+        wsRef.current.close()
+      }
+      
+      setAuthenticated(false)
+      setConnected(false)
+      setTabs([])
+    } catch (err) {
+      console.error('Logout failed:', err)
     }
   }
 
@@ -211,18 +243,14 @@ function App() {
 
   const loadHistory = async () => {
     try {
-      const token = localStorage.getItem('token')
       const response = await fetch(`/api/history?tabId=${activeTabId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        credentials: 'include'
       })
       if (response.ok) {
         const data = await response.json()
         setHistory(data || [])
         setShowHistory(true)
       } else if (response.status === 401) {
-        localStorage.removeItem('token')
         setAuthenticated(false)
       }
     } catch (err) {
@@ -244,18 +272,14 @@ function App() {
 
   const loadSnapshots = async () => {
     try {
-      const token = localStorage.getItem('token')
       const response = await fetch('/api/snapshots', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        credentials: 'include'
       })
       if (response.ok) {
         const data = await response.json()
         setSnapshots(data || [])
         setShowSnapshots(true)
       } else if (response.status === 401) {
-        localStorage.removeItem('token')
         setAuthenticated(false)
       }
     } catch (err) {
@@ -270,13 +294,12 @@ function App() {
     }
 
     try {
-      const token = localStorage.getItem('token')
       const response = await fetch('/api/snapshots', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
         },
+        credentials: 'include',
         body: JSON.stringify({
           name: snapshotName,
           description: snapshotDesc,
@@ -289,7 +312,6 @@ function App() {
         loadSnapshots()
         alert('Snapshot created successfully!')
       } else if (response.status === 401) {
-        localStorage.removeItem('token')
         setAuthenticated(false)
       }
     } catch (err) {
@@ -301,10 +323,8 @@ function App() {
     try {
       const tabs = JSON.parse(snapshot.tabs_data)
       if (confirm(`Restore snapshot "${snapshot.name}"? This will replace all current tabs.`)) {
-        // Send delete for all current tabs except first
         tabs.forEach((tab: Tab, index: number) => {
           if (index === 0) {
-            // Update first tab
             const msg: Message = {
               type: 'update',
               tabId: tab.id,
@@ -312,7 +332,6 @@ function App() {
             }
             wsRef.current?.send(JSON.stringify(msg))
           } else {
-            // Create additional tabs
             const msg: Message = {
               type: 'create',
               tabId: tab.id,
@@ -342,12 +361,9 @@ function App() {
     formData.append('image', file)
 
     try {
-      const token = localStorage.getItem('token')
       const response = await fetch('/api/upload', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
+        credentials: 'include',
         body: formData,
       })
 
@@ -357,7 +373,6 @@ function App() {
         const currentContent = activeTab?.content || ''
         handleEditorChange(currentContent + imageMarkdown)
       } else if (response.status === 401) {
-        localStorage.removeItem('token')
         setAuthenticated(false)
       }
     } catch (err) {
@@ -389,18 +404,12 @@ function App() {
   }
 
   useEffect(() => {
-    // Check for existing token on mount
-    const token = localStorage.getItem('token')
-    if (token) {
-      setAuthenticated(true)
-    }
+    checkAuth().then(isAuth => {
+      if (isAuth) {
+        connectWebSocket()
+      }
+    })
   }, [])
-
-  useEffect(() => {
-    if (authenticated && !wsRef.current) {
-      connectWebSocket()
-    }
-  }, [authenticated, connectWebSocket])
 
   useEffect(() => {
     document.addEventListener('paste', handlePaste)
@@ -411,6 +420,14 @@ function App() {
       }
     }
   }, [activeTab])
+
+  if (checking) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+        <div className="text-gray-600">Loading...</div>
+      </div>
+    )
+  }
 
   if (!authenticated) {
     return (
@@ -464,8 +481,8 @@ function App() {
       onDrop={handleDrop}
       onDragOver={(e) => e.preventDefault()}
     >
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between shadow-sm">
+      {/* Status Bar - Line 1 */}
+      <div className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between shadow-sm">
         <div className="flex items-center space-x-4">
           <h1 className="text-2xl font-bold text-gray-800">BoardCast</h1>
           <div className="flex items-center space-x-2">
@@ -476,123 +493,154 @@ function App() {
           </div>
         </div>
         
-        <div className="flex items-center space-x-3">
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="px-4 py-2 bg-green-100 text-green-700 rounded-lg font-medium hover:bg-green-200 transition"
-            title="Upload image"
-          >
-            Upload Image
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0]
-              if (file) handleImageUpload(file)
-            }}
-          />
-          <button
-            onClick={loadHistory}
-            className="px-4 py-2 bg-purple-100 text-purple-700 rounded-lg font-medium hover:bg-purple-200 transition"
-          >
-            History
-          </button>
-          <button
-            onClick={loadSnapshots}
-            className="px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg font-medium hover:bg-indigo-200 transition"
-          >
-            Snapshots
-          </button>
-          <button
-            onClick={() => setPreviewMode(!previewMode)}
-            className={`px-4 py-2 rounded-lg font-medium transition ${
-              previewMode
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            }`}
-          >
-            {previewMode ? 'Edit Mode' : 'Preview'}
-          </button>
-          <button
-            onClick={clearCurrentTab}
-            className="px-4 py-2 bg-red-100 text-red-700 rounded-lg font-medium hover:bg-red-200 transition"
-          >
-            Clear
-          </button>
-        </div>
+        <button
+          onClick={handleLogout}
+          className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition flex items-center space-x-2"
+        >
+          <span>Logout</span>
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+        </button>
       </div>
 
-      {/* Tabs */}
-      <div className="bg-white border-b border-gray-200 px-6 py-2 flex items-center space-x-2 overflow-x-auto">
-        {tabs.map(tab => (
-          <div
-            key={tab.id}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-t-lg cursor-pointer transition ${
-              activeTabId === tab.id
-                ? 'bg-gray-100 border-b-2 border-blue-600'
-                : 'hover:bg-gray-50'
-            }`}
-          >
-            {editingTabId === tab.id ? (
-              <input
-                type="text"
-                value={editingTabName}
-                onChange={(e) => setEditingTabName(e.target.value)}
-                onBlur={() => renameTab(tab.id, editingTabName)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') renameTab(tab.id, editingTabName)
-                  if (e.key === 'Escape') {
-                    setEditingTabId(null)
-                    setEditingTabName('')
-                  }
-                }}
-                className="px-2 py-1 border border-gray-300 rounded text-sm"
-                autoFocus
-              />
-            ) : (
-              <>
-                <span
-                  onClick={() => setActiveTabId(tab.id)}
-                  onDoubleClick={() => {
-                    setEditingTabId(tab.id)
-                    setEditingTabName(tab.name)
-                  }}
-                  className="text-sm font-medium"
-                >
-                  {tab.name}
-                </span>
-                {tabs.length > 1 && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      deleteTab(tab.id)
-                    }}
-                    className="text-gray-400 hover:text-red-600"
-                  >
-                    ×
-                  </button>
-                )}
-              </>
-            )}
-          </div>
-        ))}
+      {/* Action Bar - Line 2 */}
+      <div className="bg-white border-b border-gray-200 px-6 py-3 flex items-center space-x-3 shadow-sm">
         <button
-          onClick={createNewTab}
-          className="px-3 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition"
-          title="New tab"
+          onClick={loadHistory}
+          className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg font-medium hover:bg-blue-200 transition"
+          title="View history"
         >
-          +
+          History
+        </button>
+        <button
+          onClick={loadSnapshots}
+          className="px-4 py-2 bg-purple-100 text-purple-700 rounded-lg font-medium hover:bg-purple-200 transition"
+          title="Manage snapshots"
+        >
+          Snapshots
+        </button>
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          className="px-4 py-2 bg-green-100 text-green-700 rounded-lg font-medium hover:bg-green-200 transition"
+          title="Upload image"
+        >
+          Upload Image
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0]
+            if (file) handleImageUpload(file)
+          }}
+        />
+        <button
+          onClick={() => setPreviewMode(!previewMode)}
+          className={`px-4 py-2 rounded-lg font-medium transition ${
+            previewMode
+              ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+          }`}
+          title="Toggle preview"
+        >
+          {previewMode ? 'Edit' : 'Preview'}
+        </button>
+        <button
+          onClick={clearCurrentTab}
+          className="px-4 py-2 bg-red-100 text-red-700 rounded-lg font-medium hover:bg-red-200 transition"
+          title="Clear current tab"
+        >
+          Clear
         </button>
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 overflow-hidden flex">
-        <div className="flex-1">
+      <div className="flex-1 flex overflow-hidden">
+        {/* Sidebar */}
+        <div className="w-64 bg-white border-r border-gray-200 overflow-y-auto">
+          <div className="p-4">
+            <button
+              onClick={createNewTab}
+              className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition shadow-sm mb-4"
+            >
+              + New Tab
+            </button>
+            
+            <div className="space-y-2">
+              {tabs.map(tab => (
+                <div
+                  key={tab.id}
+                  className={`group relative p-3 rounded-lg cursor-pointer transition ${
+                    activeTabId === tab.id
+                      ? 'bg-blue-50 border-2 border-blue-500'
+                      : 'bg-gray-50 border-2 border-transparent hover:bg-gray-100'
+                  }`}
+                  onClick={() => setActiveTabId(tab.id)}
+                >
+                  {editingTabId === tab.id ? (
+                    <input
+                      type="text"
+                      value={editingTabName}
+                      onChange={(e) => setEditingTabName(e.target.value)}
+                      onBlur={() => renameTab(tab.id, editingTabName)}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                          renameTab(tab.id, editingTabName)
+                        }
+                      }}
+                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      autoFocus
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  ) : (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-800 truncate">
+                        {tab.name}
+                      </span>
+                      <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setEditingTabId(tab.id)
+                            setEditingTabName(tab.name)
+                          }}
+                          className="p-1 text-gray-600 hover:text-blue-600 rounded"
+                          title="Rename"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                          </svg>
+                        </button>
+                        {tabs.length > 1 && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              deleteTab(tab.id)
+                            }}
+                            className="p-1 text-gray-600 hover:text-red-600 rounded"
+                            title="Delete"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Editor/Preview Area */}
+        <div className="flex-1 relative">
           {previewMode ? (
-            <div className="h-full overflow-auto bg-white p-8">
+            <div className="h-full overflow-auto p-8 bg-white">
               <div className="max-w-4xl mx-auto prose prose-lg">
                 <ReactMarkdown>{activeTab?.content || ''}</ReactMarkdown>
               </div>
@@ -605,16 +653,11 @@ function App() {
               onChange={handleEditorChange}
               theme="vs-light"
               options={{
-                fontSize: 16,
+                fontSize: 14,
                 wordWrap: 'on',
                 minimap: { enabled: false },
                 lineNumbers: 'off',
-                folding: false,
                 scrollBeyondLastLine: false,
-                renderLineHighlight: 'none',
-                overviewRulerBorder: false,
-                hideCursorInOverviewRuler: true,
-                padding: { top: 20, bottom: 20 },
               }}
               onMount={(editor) => {
                 editorRef.current = editor
@@ -622,107 +665,113 @@ function App() {
             />
           )}
         </div>
+      </div>
 
-        {/* History Sidebar */}
-        {showHistory && (
-          <div className="w-80 border-l border-gray-200 bg-white p-4 overflow-y-auto">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">History</h3>
+      {/* History Modal */}
+      {showHistory && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-800">History</h2>
               <button
                 onClick={() => setShowHistory(false)}
                 className="text-gray-500 hover:text-gray-700"
               >
-                ×
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
             </div>
-            <div className="space-y-2">
-              {history.map(record => (
-                <div
-                  key={record.id}
-                  className="border border-gray-200 rounded p-3 hover:bg-gray-50 cursor-pointer"
-                  onClick={() => restoreHistory(record)}
-                >
-                  <div className="text-xs text-gray-500 mb-1">
-                    {new Date(record.created).toLocaleString()}
-                  </div>
-                  <div className="text-sm text-gray-700 truncate">
-                    {record.content.substring(0, 100)}...
-                  </div>
+            <div className="overflow-y-auto max-h-[calc(80vh-120px)] p-6">
+              {history.length === 0 ? (
+                <p className="text-gray-500 text-center py-8">No history available</p>
+              ) : (
+                <div className="space-y-3">
+                  {history.map(record => (
+                    <div
+                      key={record.id}
+                      className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition"
+                      onClick={() => restoreHistory(record)}
+                    >
+                      <div className="text-sm text-gray-600 mb-2">
+                        {new Date(record.created).toLocaleString()}
+                      </div>
+                      <div className="text-sm text-gray-800 line-clamp-2">
+                        {record.content.substring(0, 100)}...
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Snapshots Sidebar */}
-        {showSnapshots && (
-          <div className="w-96 border-l border-gray-200 bg-white p-4 overflow-y-auto">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">Snapshots</h3>
+      {/* Snapshots Modal */}
+      {showSnapshots && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-800">Snapshots</h2>
               <button
                 onClick={() => setShowSnapshots(false)}
                 className="text-gray-500 hover:text-gray-700"
               >
-                ×
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
             </div>
-            
-            <div className="mb-4 p-4 bg-gray-50 rounded">
-              <h4 className="font-medium mb-2">Create Snapshot</h4>
-              <input
-                type="text"
-                placeholder="Snapshot name"
-                value={snapshotName}
-                onChange={(e) => setSnapshotName(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded mb-2"
-              />
-              <input
-                type="text"
-                placeholder="Description (optional)"
-                value={snapshotDesc}
-                onChange={(e) => setSnapshotDesc(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded mb-2"
-              />
-              <button
-                onClick={createSnapshot}
-                className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
-              >
-                Create
-              </button>
-            </div>
-
-            <div className="space-y-2">
-              {snapshots.map(snapshot => (
-                <div
-                  key={snapshot.id}
-                  className="border border-gray-200 rounded p-3 hover:bg-gray-50 cursor-pointer"
-                  onClick={() => restoreSnapshot(snapshot)}
+            <div className="overflow-y-auto max-h-[calc(80vh-120px)] p-6">
+              <div className="mb-6 space-y-3">
+                <input
+                  type="text"
+                  value={snapshotName}
+                  onChange={(e) => setSnapshotName(e.target.value)}
+                  placeholder="Snapshot name"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                />
+                <input
+                  type="text"
+                  value={snapshotDesc}
+                  onChange={(e) => setSnapshotDesc(e.target.value)}
+                  placeholder="Description (optional)"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                />
+                <button
+                  onClick={createSnapshot}
+                  className="w-full px-4 py-2 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition"
                 >
-                  <div className="font-medium text-gray-800">{snapshot.name}</div>
-                  {snapshot.description && (
-                    <div className="text-sm text-gray-600 mb-1">{snapshot.description}</div>
-                  )}
-                  <div className="text-xs text-gray-500">
-                    {new Date(snapshot.created).toLocaleString()}
-                  </div>
+                  Create Snapshot
+                </button>
+              </div>
+
+              {snapshots.length === 0 ? (
+                <p className="text-gray-500 text-center py-8">No snapshots available</p>
+              ) : (
+                <div className="space-y-3">
+                  {snapshots.map(snapshot => (
+                    <div
+                      key={snapshot.id}
+                      className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition"
+                      onClick={() => restoreSnapshot(snapshot)}
+                    >
+                      <div className="font-medium text-gray-800 mb-1">{snapshot.name}</div>
+                      {snapshot.description && (
+                        <div className="text-sm text-gray-600 mb-2">{snapshot.description}</div>
+                      )}
+                      <div className="text-xs text-gray-500">
+                        {new Date(snapshot.created).toLocaleString()}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
           </div>
-        )}
-      </div>
-
-      {/* Status Bar */}
-      <div className="bg-white border-t border-gray-200 px-6 py-2 flex items-center justify-between text-sm text-gray-600">
-        <div>
-          Markdown supported • {activeTab?.content.length || 0} characters • {tabs.length} {tabs.length === 1 ? 'tab' : 'tabs'}
         </div>
-        <div className="flex items-center space-x-4">
-          <span>Drag & drop or paste images to upload</span>
-          <span>•</span>
-          <span>Auto-saved</span>
-        </div>
-      </div>
+      )}
     </div>
   )
 }

@@ -13,7 +13,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
 	"github.com/rs/cors"
 )
@@ -23,7 +22,8 @@ var (
 	password     = flag.String("password", "", "Authentication password (deprecated, use env or file)")
 	passwordFile = flag.String("password-file", "", "Path to password file")
 	dataDir      = flag.String("data-dir", "./data", "Data directory for database and uploads")
-	jwtSecret    []byte
+	sessions     = make(map[string]time.Time)
+	sessionMu    sync.RWMutex
 	upgrader     = websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
 			return true
@@ -93,40 +93,59 @@ func getPassword() string {
 	return "boardcast"
 }
 
-func generateJWTSecret() {
-	jwtSecret = make([]byte, 32)
-	if _, err := rand.Read(jwtSecret); err != nil {
-		log.Fatal("Failed to generate JWT secret:", err)
-	}
+func generateSessionID() string {
+	b := make([]byte, 32)
+	rand.Read(b)
+	return fmt.Sprintf("%x", b)
 }
 
-func createToken(password string) (string, error) {
-	claims := jwt.MapClaims{
-		"authorized": true,
-		"exp":        time.Now().Add(24 * time.Hour).Unix(),
-	}
-
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(jwtSecret)
+func createSession() string {
+	sessionID := generateSessionID()
+	sessionMu.Lock()
+	sessions[sessionID] = time.Now().Add(24 * time.Hour)
+	sessionMu.Unlock()
+	return sessionID
 }
 
-func verifyToken(tokenString string) error {
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method")
+func validateSession(sessionID string) bool {
+	sessionMu.RLock()
+	expiry, exists := sessions[sessionID]
+	sessionMu.RUnlock()
+	
+	if !exists {
+		return false
+	}
+	
+	if time.Now().After(expiry) {
+		sessionMu.Lock()
+		delete(sessions, sessionID)
+		sessionMu.Unlock()
+		return false
+	}
+	
+	return true
+}
+
+func deleteSession(sessionID string) {
+	sessionMu.Lock()
+	delete(sessions, sessionID)
+	sessionMu.Unlock()
+}
+
+func cleanupSessions() {
+	ticker := time.NewTicker(1 * time.Hour)
+	go func() {
+		for range ticker.C {
+			sessionMu.Lock()
+			now := time.Now()
+			for id, expiry := range sessions {
+				if now.After(expiry) {
+					delete(sessions, id)
+				}
+			}
+			sessionMu.Unlock()
 		}
-		return jwtSecret, nil
-	})
-
-	if err != nil {
-		return err
-	}
-
-	if !token.Valid {
-		return fmt.Errorf("invalid token")
-	}
-
-	return nil
+	}()
 }
 
 func newHub(storage *Storage) *Hub {
@@ -299,43 +318,73 @@ func (c *Client) writePump() {
 
 func handleAuth(pwd string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var req struct {
-			Password string `json:"password"`
-		}
+		if r.Method == "POST" {
+			var req struct {
+				Password string `json:"password"`
+			}
 
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Invalid request", http.StatusBadRequest)
-			return
-		}
-
-		if req.Password == pwd {
-			token, err := createToken(pwd)
-			if err != nil {
-				http.Error(w, "Failed to create token", http.StatusInternalServerError)
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				http.Error(w, "Invalid request", http.StatusBadRequest)
 				return
 			}
 
-			json.NewEncoder(w).Encode(map[string]string{
-				"token": token,
+			if req.Password == pwd {
+				sessionID := createSession()
+				
+				http.SetCookie(w, &http.Cookie{
+					Name:     "session_id",
+					Value:    sessionID,
+					Path:     "/",
+					MaxAge:   86400, // 24 hours
+					HttpOnly: true,
+					SameSite: http.SameSiteLaxMode,
+				})
+
+				json.NewEncoder(w).Encode(map[string]string{
+					"status": "authenticated",
+				})
+				log.Println("User authenticated successfully")
+			} else {
+				http.Error(w, "Invalid password", http.StatusUnauthorized)
+				log.Println("Authentication failed: invalid password")
+			}
+		} else if r.Method == "DELETE" {
+			// Logout
+			cookie, err := r.Cookie("session_id")
+			if err == nil {
+				deleteSession(cookie.Value)
+			}
+			
+			http.SetCookie(w, &http.Cookie{
+				Name:   "session_id",
+				Value:  "",
+				Path:   "/",
+				MaxAge: -1,
 			})
-			log.Println("User authenticated successfully")
-		} else {
-			http.Error(w, "Invalid password", http.StatusUnauthorized)
-			log.Println("Authentication failed: invalid password")
+			
+			json.NewEncoder(w).Encode(map[string]string{
+				"status": "logged_out",
+			})
+			log.Println("User logged out")
+		} else if r.Method == "GET" {
+			// Check session
+			cookie, err := r.Cookie("session_id")
+			if err != nil || !validateSession(cookie.Value) {
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+			
+			json.NewEncoder(w).Encode(map[string]string{
+				"status": "authenticated",
+			})
 		}
 	}
 }
 
 func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		authHeader := r.Header.Get("Authorization")
-		if authHeader == "" {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-
-		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-		if err := verifyToken(tokenString); err != nil {
+		cookie, err := r.Cookie("session_id")
+		if err != nil || !validateSession(cookie.Value) {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
@@ -345,14 +394,9 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 }
 
 func handleWebSocket(hub *Hub, w http.ResponseWriter, r *http.Request) {
-	// Verify token from query parameter
-	token := r.URL.Query().Get("token")
-	if token == "" {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-
-	if err := verifyToken(token); err != nil {
+	// Verify session from cookie
+	cookie, err := r.Cookie("session_id")
+	if err != nil || !validateSession(cookie.Value) {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -514,7 +558,9 @@ func main() {
 
 	// Get password from secure source
 	pwd := getPassword()
-	generateJWTSecret()
+	
+	// Start session cleanup
+	cleanupSessions()
 
 	// Create data directory
 	if err := os.MkdirAll(*dataDir, 0755); err != nil {
