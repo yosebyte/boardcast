@@ -17,6 +17,8 @@ interface Message {
   tabs?: Tab[]
 }
 
+type ThemeMode = 'system' | 'light' | 'dark'
+
 function App() {
   const [authenticated, setAuthenticated] = useState(false)
   const [checking, setChecking] = useState(true)
@@ -28,10 +30,66 @@ function App() {
   const [error, setError] = useState('')
   const [editingTabId, setEditingTabId] = useState<string | null>(null)
   const [editingTabName, setEditingTabName] = useState('')
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
+    const saved = localStorage.getItem('theme')
+    return (saved as ThemeMode) || 'system'
+  })
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimerRef = useRef<NodeJS.Timeout | null>(null)
   const editorRef = useRef<any>(null)
   const updateTimerRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Get effective theme based on mode and system preference
+  const getEffectiveTheme = useCallback(() => {
+    if (themeMode === 'system') {
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+    }
+    return themeMode
+  }, [themeMode])
+
+  const [effectiveTheme, setEffectiveTheme] = useState(getEffectiveTheme())
+
+  useEffect(() => {
+    const updateTheme = () => {
+      setEffectiveTheme(getEffectiveTheme())
+    }
+
+    updateTheme()
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+    mediaQuery.addEventListener('change', updateTheme)
+
+    return () => mediaQuery.removeEventListener('change', updateTheme)
+  }, [themeMode, getEffectiveTheme])
+
+  const cycleTheme = () => {
+    const modes: ThemeMode[] = ['system', 'light', 'dark']
+    const currentIndex = modes.indexOf(themeMode)
+    const nextMode = modes[(currentIndex + 1) % modes.length]
+    setThemeMode(nextMode)
+    localStorage.setItem('theme', nextMode)
+  }
+
+  const getThemeIcon = () => {
+    if (themeMode === 'system') {
+      return (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+        </svg>
+      )
+    } else if (themeMode === 'light') {
+      return (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+        </svg>
+      )
+    } else {
+      return (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+        </svg>
+      )
+    }
+  }
 
   const activeTab = tabs.find(t => t.id === activeTabId)
 
@@ -326,14 +384,14 @@ function App() {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50">
+    <div className={`h-screen flex flex-col ${effectiveTheme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'}`}>
       {/* Top Header Bar */}
-      <div className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between shadow-sm">
+      <div className={`${effectiveTheme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border-b px-6 py-3 flex items-center justify-between shadow-sm`}>
         <div className="flex items-center space-x-4">
-          <h1 className="text-xl font-bold text-gray-800">BoardCast</h1>
+          <h1 className={`text-xl font-bold ${effectiveTheme === 'dark' ? 'text-white' : 'text-gray-800'}`}>BoardCast</h1>
           <div className="flex items-center space-x-2">
             <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`} />
-            <span className="text-sm text-gray-600">
+            <span className={`text-sm ${effectiveTheme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
               {connected ? 'Connected' : 'Disconnected'}
             </span>
           </div>
@@ -352,8 +410,24 @@ function App() {
           </button>
           
           <button
+            onClick={cycleTheme}
+            className={`p-2 rounded-lg transition ${
+              effectiveTheme === 'dark'
+                ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+            title={`Theme: ${themeMode} (click to cycle)`}
+          >
+            {getThemeIcon()}
+          </button>
+          
+          <button
             onClick={handleLogout}
-            className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition text-sm"
+            className={`px-4 py-2 rounded-lg font-medium transition text-sm ${
+              effectiveTheme === 'dark'
+                ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
           >
             Logout
           </button>
@@ -364,7 +438,11 @@ function App() {
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="flex-1 flex overflow-hidden">
           {/* Sidebar */}
-          <div className="w-64 bg-white border-r border-gray-200 overflow-y-auto">
+          <div className={`w-64 border-r overflow-y-auto ${
+            effectiveTheme === 'dark' 
+              ? 'bg-gray-800 border-gray-700' 
+              : 'bg-white border-gray-200'
+          }`}>
             <div className="p-4">
               <button
                 onClick={createNewTab}
@@ -379,8 +457,12 @@ function App() {
                     key={tab.id}
                     className={`group relative p-3 rounded-lg cursor-pointer transition ${
                       activeTabId === tab.id
-                        ? 'bg-blue-50 border-2 border-blue-500'
-                        : 'bg-gray-50 border-2 border-transparent hover:bg-gray-100'
+                        ? effectiveTheme === 'dark'
+                          ? 'bg-blue-900 border-2 border-blue-500'
+                          : 'bg-blue-50 border-2 border-blue-500'
+                        : effectiveTheme === 'dark'
+                          ? 'bg-gray-700 border-2 border-transparent hover:bg-gray-600'
+                          : 'bg-gray-50 border-2 border-transparent hover:bg-gray-100'
                     }`}
                     onClick={() => setActiveTabId(tab.id)}
                   >
@@ -401,7 +483,9 @@ function App() {
                       />
                     ) : (
                       <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-gray-800 truncate">
+                        <span className={`text-sm font-medium truncate ${
+                          effectiveTheme === 'dark' ? 'text-gray-200' : 'text-gray-800'
+                        }`}>
                           {tab.name}
                         </span>
                         <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition">
@@ -451,14 +535,17 @@ function App() {
                 defaultLanguage="markdown"
                 value={activeTab?.content || ''}
                 onChange={handleEditorChange}
-                theme="vs-light"
+                theme={effectiveTheme === 'dark' ? 'vs-dark' : 'vs-light'}
                 options={{
                   fontSize: 14,
                   wordWrap: 'on',
                   minimap: { enabled: false },
                   lineNumbers: 'on',
+                  lineNumbersMinChars: 3,
                   scrollBeyondLastLine: false,
                   automaticLayout: true,
+                  glyphMargin: false,
+                  folding: false,
                 }}
                 onMount={(editor) => {
                   editorRef.current = editor
@@ -468,8 +555,12 @@ function App() {
 
             {/* Preview */}
             {showPreview && (
-              <div className="flex-1 overflow-auto p-8 bg-white">
-                <div className="max-w-4xl mx-auto prose prose-slate prose-lg">
+              <div className={`flex-1 overflow-auto p-8 ${
+                effectiveTheme === 'dark' ? 'bg-gray-900' : 'bg-white'
+              }`}>
+                <div className={`max-w-4xl mx-auto prose prose-lg ${
+                  effectiveTheme === 'dark' ? 'prose-invert' : 'prose-slate'
+                }`}>
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
                     {activeTab?.content || ''}
                   </ReactMarkdown>
@@ -480,7 +571,11 @@ function App() {
         </div>
 
         {/* Bottom Status Bar */}
-        <div className="bg-white border-t border-gray-200 px-6 py-2 flex items-center justify-between text-sm text-gray-600">
+        <div className={`border-t px-6 py-2 flex items-center justify-between text-sm ${
+          effectiveTheme === 'dark'
+            ? 'bg-gray-800 border-gray-700 text-gray-300'
+            : 'bg-white border-gray-200 text-gray-600'
+        }`}>
           <div className="flex items-center space-x-4">
             <span>Tab: {activeTab?.name || 'None'}</span>
             <span>Lines: {(activeTab?.content?.split('\n').length || 0)}</span>
@@ -490,7 +585,11 @@ function App() {
             href="https://github.com/yosebyte/boardcast" 
             target="_blank" 
             rel="noopener noreferrer"
-            className="text-blue-600 hover:text-blue-800 flex items-center space-x-1"
+            className={`flex items-center space-x-1 ${
+              effectiveTheme === 'dark'
+                ? 'text-blue-400 hover:text-blue-300'
+                : 'text-blue-600 hover:text-blue-800'
+            }`}
           >
             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
               <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.840 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.430.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
