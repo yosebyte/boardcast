@@ -8,6 +8,21 @@ interface Tab {
   content: string
 }
 
+interface HistoryRecord {
+  id: number
+  tab_id: string
+  content: string
+  created: string
+}
+
+interface SnapshotRecord {
+  id: number
+  name: string
+  description: string
+  tabs_data: string
+  created: string
+}
+
 interface Message {
   type: string
   tabId?: string
@@ -27,8 +42,15 @@ function App() {
   const [error, setError] = useState('')
   const [editingTabId, setEditingTabId] = useState<string | null>(null)
   const [editingTabName, setEditingTabName] = useState('')
+  const [showHistory, setShowHistory] = useState(false)
+  const [showSnapshots, setShowSnapshots] = useState(false)
+  const [history, setHistory] = useState<HistoryRecord[]>([])
+  const [snapshots, setSnapshots] = useState<SnapshotRecord[]>([])
+  const [snapshotName, setSnapshotName] = useState('')
+  const [snapshotDesc, setSnapshotDesc] = useState('')
   const wsRef = useRef<WebSocket | null>(null)
   const editorRef = useRef<any>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const activeTab = tabs.find(t => t.id === activeTabId)
 
@@ -105,6 +127,8 @@ function App() {
       })
 
       if (response.ok) {
+        const data = await response.json()
+        localStorage.setItem('token', data.token)
         setAuthenticated(true)
         connectWebSocket()
       } else {
@@ -179,13 +203,166 @@ function App() {
     }
   }
 
+  const loadHistory = async () => {
+    try {
+      const response = await fetch(`/api/history?tabId=${activeTabId}`)
+      if (response.ok) {
+        const data = await response.json()
+        setHistory(data || [])
+        setShowHistory(true)
+      }
+    } catch (err) {
+      console.error('Failed to load history:', err)
+    }
+  }
+
+  const restoreHistory = (record: HistoryRecord) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      const msg: Message = {
+        type: 'update',
+        tabId: activeTabId,
+        content: record.content,
+      }
+      wsRef.current.send(JSON.stringify(msg))
+      setShowHistory(false)
+    }
+  }
+
+  const loadSnapshots = async () => {
+    try {
+      const response = await fetch('/api/snapshots')
+      if (response.ok) {
+        const data = await response.json()
+        setSnapshots(data || [])
+        setShowSnapshots(true)
+      }
+    } catch (err) {
+      console.error('Failed to load snapshots:', err)
+    }
+  }
+
+  const createSnapshot = async () => {
+    if (!snapshotName.trim()) {
+      alert('Please enter a snapshot name')
+      return
+    }
+
+    try {
+      const response = await fetch('/api/snapshots', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: snapshotName,
+          description: snapshotDesc,
+        }),
+      })
+
+      if (response.ok) {
+        setSnapshotName('')
+        setSnapshotDesc('')
+        loadSnapshots()
+        alert('Snapshot created successfully!')
+      }
+    } catch (err) {
+      console.error('Failed to create snapshot:', err)
+    }
+  }
+
+  const restoreSnapshot = (snapshot: SnapshotRecord) => {
+    try {
+      const tabs = JSON.parse(snapshot.tabs_data)
+      if (confirm(`Restore snapshot "${snapshot.name}"? This will replace all current tabs.`)) {
+        // Send delete for all current tabs except first
+        tabs.forEach((tab: Tab, index: number) => {
+          if (index === 0) {
+            // Update first tab
+            const msg: Message = {
+              type: 'update',
+              tabId: tab.id,
+              content: tab.content,
+            }
+            wsRef.current?.send(JSON.stringify(msg))
+          } else {
+            // Create additional tabs
+            const msg: Message = {
+              type: 'create',
+              tabId: tab.id,
+              name: tab.name,
+            }
+            wsRef.current?.send(JSON.stringify(msg))
+            
+            setTimeout(() => {
+              const updateMsg: Message = {
+                type: 'update',
+                tabId: tab.id,
+                content: tab.content,
+              }
+              wsRef.current?.send(JSON.stringify(updateMsg))
+            }, 100)
+          }
+        })
+        setShowSnapshots(false)
+      }
+    } catch (err) {
+      console.error('Failed to restore snapshot:', err)
+    }
+  }
+
+  const handleImageUpload = async (file: File) => {
+    const formData = new FormData()
+    formData.append('image', file)
+
+    try {
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        const imageMarkdown = `![${file.name}](${data.imageUrl})\n`
+        const currentContent = activeTab?.content || ''
+        handleEditorChange(currentContent + imageMarkdown)
+      }
+    } catch (err) {
+      console.error('Failed to upload image:', err)
+    }
+  }
+
+  const handlePaste = (e: ClipboardEvent) => {
+    const items = e.clipboardData?.items
+    if (!items) return
+
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        const file = items[i].getAsFile()
+        if (file) {
+          handleImageUpload(file)
+          e.preventDefault()
+        }
+      }
+    }
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    const files = e.dataTransfer.files
+    if (files.length > 0 && files[0].type.startsWith('image/')) {
+      handleImageUpload(files[0])
+    }
+  }
+
   useEffect(() => {
+    document.addEventListener('paste', handlePaste)
     return () => {
+      document.removeEventListener('paste', handlePaste)
       if (wsRef.current) {
         wsRef.current.close()
       }
     }
-  }, [])
+  }, [activeTab])
 
   if (!authenticated) {
     return (
@@ -226,7 +403,7 @@ function App() {
           </form>
           
           <div className="mt-6 text-center text-sm text-gray-500">
-            <p>Secure single-user whiteboard</p>
+            <p>Secure collaborative whiteboard</p>
           </div>
         </div>
       </div>
@@ -234,7 +411,11 @@ function App() {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50">
+    <div 
+      className="h-screen flex flex-col bg-gray-50"
+      onDrop={handleDrop}
+      onDragOver={(e) => e.preventDefault()}
+    >
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between shadow-sm">
         <div className="flex items-center space-x-4">
@@ -245,12 +426,38 @@ function App() {
               {connected ? 'Connected' : 'Disconnected'}
             </span>
           </div>
-          <div className="text-sm text-gray-600">
-            {activeUsers} {activeUsers === 1 ? 'user' : 'users'} online
-          </div>
         </div>
         
         <div className="flex items-center space-x-3">
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="px-4 py-2 bg-green-100 text-green-700 rounded-lg font-medium hover:bg-green-200 transition"
+            title="Upload image"
+          >
+            Upload Image
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (file) handleImageUpload(file)
+            }}
+          />
+          <button
+            onClick={loadHistory}
+            className="px-4 py-2 bg-purple-100 text-purple-700 rounded-lg font-medium hover:bg-purple-200 transition"
+          >
+            History
+          </button>
+          <button
+            onClick={loadSnapshots}
+            className="px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg font-medium hover:bg-indigo-200 transition"
+          >
+            Snapshots
+          </button>
           <button
             onClick={() => setPreviewMode(!previewMode)}
             className={`px-4 py-2 rounded-lg font-medium transition ${
@@ -261,7 +468,6 @@ function App() {
           >
             {previewMode ? 'Edit Mode' : 'Preview'}
           </button>
-          
           <button
             onClick={clearCurrentTab}
             className="px-4 py-2 bg-red-100 text-red-700 rounded-lg font-medium hover:bg-red-200 transition"
@@ -335,36 +541,126 @@ function App() {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 overflow-hidden">
-        {previewMode ? (
-          <div className="h-full overflow-auto bg-white p-8">
-            <div className="max-w-4xl mx-auto prose prose-lg">
-              <ReactMarkdown>{activeTab?.content || ''}</ReactMarkdown>
+      <div className="flex-1 overflow-hidden flex">
+        <div className="flex-1">
+          {previewMode ? (
+            <div className="h-full overflow-auto bg-white p-8">
+              <div className="max-w-4xl mx-auto prose prose-lg">
+                <ReactMarkdown>{activeTab?.content || ''}</ReactMarkdown>
+              </div>
+            </div>
+          ) : (
+            <Editor
+              height="100%"
+              defaultLanguage="markdown"
+              value={activeTab?.content || ''}
+              onChange={handleEditorChange}
+              theme="vs-light"
+              options={{
+                fontSize: 16,
+                wordWrap: 'on',
+                minimap: { enabled: false },
+                lineNumbers: 'off',
+                folding: false,
+                scrollBeyondLastLine: false,
+                renderLineHighlight: 'none',
+                overviewRulerBorder: false,
+                hideCursorInOverviewRuler: true,
+                padding: { top: 20, bottom: 20 },
+              }}
+              onMount={(editor) => {
+                editorRef.current = editor
+              }}
+            />
+          )}
+        </div>
+
+        {/* History Sidebar */}
+        {showHistory && (
+          <div className="w-80 border-l border-gray-200 bg-white p-4 overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">History</h3>
+              <button
+                onClick={() => setShowHistory(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                ×
+              </button>
+            </div>
+            <div className="space-y-2">
+              {history.map(record => (
+                <div
+                  key={record.id}
+                  className="border border-gray-200 rounded p-3 hover:bg-gray-50 cursor-pointer"
+                  onClick={() => restoreHistory(record)}
+                >
+                  <div className="text-xs text-gray-500 mb-1">
+                    {new Date(record.created).toLocaleString()}
+                  </div>
+                  <div className="text-sm text-gray-700 truncate">
+                    {record.content.substring(0, 100)}...
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
-        ) : (
-          <Editor
-            height="100%"
-            defaultLanguage="markdown"
-            value={activeTab?.content || ''}
-            onChange={handleEditorChange}
-            theme="vs-light"
-            options={{
-              fontSize: 16,
-              wordWrap: 'on',
-              minimap: { enabled: false },
-              lineNumbers: 'off',
-              folding: false,
-              scrollBeyondLastLine: false,
-              renderLineHighlight: 'none',
-              overviewRulerBorder: false,
-              hideCursorInOverviewRuler: true,
-              padding: { top: 20, bottom: 20 },
-            }}
-            onMount={(editor) => {
-              editorRef.current = editor
-            }}
-          />
+        )}
+
+        {/* Snapshots Sidebar */}
+        {showSnapshots && (
+          <div className="w-96 border-l border-gray-200 bg-white p-4 overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Snapshots</h3>
+              <button
+                onClick={() => setShowSnapshots(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                ×
+              </button>
+            </div>
+            
+            <div className="mb-4 p-4 bg-gray-50 rounded">
+              <h4 className="font-medium mb-2">Create Snapshot</h4>
+              <input
+                type="text"
+                placeholder="Snapshot name"
+                value={snapshotName}
+                onChange={(e) => setSnapshotName(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded mb-2"
+              />
+              <input
+                type="text"
+                placeholder="Description (optional)"
+                value={snapshotDesc}
+                onChange={(e) => setSnapshotDesc(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded mb-2"
+              />
+              <button
+                onClick={createSnapshot}
+                className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
+              >
+                Create
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {snapshots.map(snapshot => (
+                <div
+                  key={snapshot.id}
+                  className="border border-gray-200 rounded p-3 hover:bg-gray-50 cursor-pointer"
+                  onClick={() => restoreSnapshot(snapshot)}
+                >
+                  <div className="font-medium text-gray-800">{snapshot.name}</div>
+                  {snapshot.description && (
+                    <div className="text-sm text-gray-600 mb-1">{snapshot.description}</div>
+                  )}
+                  <div className="text-xs text-gray-500">
+                    {new Date(snapshot.created).toLocaleString()}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
       </div>
 
@@ -373,8 +669,10 @@ function App() {
         <div>
           Markdown supported • {activeTab?.content.length || 0} characters • {tabs.length} {tabs.length === 1 ? 'tab' : 'tabs'}
         </div>
-        <div>
-          Press <kbd className="px-2 py-1 bg-gray-100 rounded text-xs">Ctrl+S</kbd> to save (auto-synced)
+        <div className="flex items-center space-x-4">
+          <span>Drag & drop or paste images to upload</span>
+          <span>•</span>
+          <span>Auto-saved</span>
         </div>
       </div>
     </div>
