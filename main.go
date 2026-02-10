@@ -25,12 +25,18 @@ var (
 	}
 )
 
+type Tab struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Content string `json:"content"`
+}
+
 type Hub struct {
 	clients    map[*Client]bool
 	broadcast  chan []byte
 	register   chan *Client
 	unregister chan *Client
-	content    string
+	tabs       map[string]*Tab
 	mu         sync.RWMutex
 }
 
@@ -41,19 +47,32 @@ type Client struct {
 }
 
 type Message struct {
-	Type    string `json:"type"`
-	Content string `json:"content"`
-	Token   string `json:"token,omitempty"`
+	Type    string  `json:"type"`
+	TabID   string  `json:"tabId,omitempty"`
+	Content string  `json:"content,omitempty"`
+	Name    string  `json:"name,omitempty"`
+	Token   string  `json:"token,omitempty"`
+	Tabs    []*Tab  `json:"tabs,omitempty"`
 }
 
 func newHub() *Hub {
-	return &Hub{
+	hub := &Hub{
 		broadcast:  make(chan []byte, 256),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
 		clients:    make(map[*Client]bool),
-		content:    "",
+		tabs:       make(map[string]*Tab),
 	}
+	
+	// Create default tab
+	defaultTab := &Tab{
+		ID:      "default",
+		Name:    "Main",
+		Content: "",
+	}
+	hub.tabs[defaultTab.ID] = defaultTab
+	
+	return hub
 }
 
 func (h *Hub) run() {
@@ -61,16 +80,19 @@ func (h *Hub) run() {
 		select {
 		case client := <-h.register:
 			h.clients[client] = true
-			// Send current content to new client
+			// Send all tabs to new client
 			h.mu.RLock()
-			if h.content != "" {
-				msg, _ := json.Marshal(Message{
-					Type:    "sync",
-					Content: h.content,
-				})
-				client.send <- msg
+			tabs := make([]*Tab, 0, len(h.tabs))
+			for _, tab := range h.tabs {
+				tabs = append(tabs, tab)
 			}
 			h.mu.RUnlock()
+			
+			msg, _ := json.Marshal(Message{
+				Type: "init",
+				Tabs: tabs,
+			})
+			client.send <- msg
 			log.Printf("Client connected. Total clients: %d", len(h.clients))
 
 		case client := <-h.unregister:
@@ -81,14 +103,29 @@ func (h *Hub) run() {
 			}
 
 		case message := <-h.broadcast:
-			// Update hub content
 			var msg Message
 			if err := json.Unmarshal(message, &msg); err == nil {
-				if msg.Type == "update" {
-					h.mu.Lock()
-					h.content = msg.Content
-					h.mu.Unlock()
+				h.mu.Lock()
+				switch msg.Type {
+				case "update":
+					if tab, exists := h.tabs[msg.TabID]; exists {
+						tab.Content = msg.Content
+					}
+				case "create":
+					newTab := &Tab{
+						ID:      msg.TabID,
+						Name:    msg.Name,
+						Content: "",
+					}
+					h.tabs[newTab.ID] = newTab
+				case "rename":
+					if tab, exists := h.tabs[msg.TabID]; exists {
+						tab.Name = msg.Name
+					}
+				case "delete":
+					delete(h.tabs, msg.TabID)
 				}
+				h.mu.Unlock()
 			}
 
 			// Broadcast to all clients
@@ -235,7 +272,7 @@ func main() {
 	}).Handler(mux)
 
 	addr := fmt.Sprintf(":%s", *port)
-	log.Printf("🚀 BoardCast server starting on http://localhost:%s", *port)
-	log.Printf("🔐 Password: %s", *password)
+	log.Printf("BoardCast server starting on http://localhost:%s", *port)
+	log.Printf("Password: %s", *password)
 	log.Fatal(http.ListenAndServe(addr, handler))
 }

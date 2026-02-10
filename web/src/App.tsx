@@ -2,22 +2,35 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import Editor from '@monaco-editor/react'
 import ReactMarkdown from 'react-markdown'
 
+interface Tab {
+  id: string
+  name: string
+  content: string
+}
+
 interface Message {
   type: string
-  content: string
-  token?: string
+  tabId?: string
+  content?: string
+  name?: string
+  tabs?: Tab[]
 }
 
 function App() {
   const [authenticated, setAuthenticated] = useState(false)
   const [password, setPassword] = useState('')
-  const [content, setContent] = useState('')
+  const [tabs, setTabs] = useState<Tab[]>([])
+  const [activeTabId, setActiveTabId] = useState<string>('default')
   const [previewMode, setPreviewMode] = useState(false)
   const [connected, setConnected] = useState(false)
   const [activeUsers, setActiveUsers] = useState(1)
   const [error, setError] = useState('')
+  const [editingTabId, setEditingTabId] = useState<string | null>(null)
+  const [editingTabName, setEditingTabName] = useState('')
   const wsRef = useRef<WebSocket | null>(null)
   const editorRef = useRef<any>(null)
+
+  const activeTab = tabs.find(t => t.id === activeTabId)
 
   const connectWebSocket = useCallback(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
@@ -31,8 +44,31 @@ function App() {
 
     ws.onmessage = (event) => {
       const msg: Message = JSON.parse(event.data)
-      if (msg.type === 'sync' || msg.type === 'update') {
-        setContent(msg.content)
+      
+      if (msg.type === 'init' && msg.tabs) {
+        setTabs(msg.tabs)
+        if (msg.tabs.length > 0 && !activeTabId) {
+          setActiveTabId(msg.tabs[0].id)
+        }
+      } else if (msg.type === 'update' && msg.tabId) {
+        setTabs(prev => prev.map(tab =>
+          tab.id === msg.tabId ? { ...tab, content: msg.content || '' } : tab
+        ))
+      } else if (msg.type === 'create' && msg.tabId && msg.name) {
+        setTabs(prev => [...prev, { id: msg.tabId, name: msg.name, content: '' }])
+        setActiveTabId(msg.tabId)
+      } else if (msg.type === 'rename' && msg.tabId && msg.name) {
+        setTabs(prev => prev.map(tab =>
+          tab.id === msg.tabId ? { ...tab, name: msg.name } : tab
+        ))
+      } else if (msg.type === 'delete' && msg.tabId) {
+        setTabs(prev => {
+          const newTabs = prev.filter(tab => tab.id !== msg.tabId)
+          if (activeTabId === msg.tabId && newTabs.length > 0) {
+            setActiveTabId(newTabs[0].id)
+          }
+          return newTabs
+        })
       }
     }
 
@@ -45,7 +81,6 @@ function App() {
     ws.onclose = () => {
       console.log('WebSocket disconnected')
       setConnected(false)
-      // Reconnect after 3 seconds
       setTimeout(() => {
         if (authenticated) {
           connectWebSocket()
@@ -54,7 +89,7 @@ function App() {
     }
 
     wsRef.current = ws
-  }, [authenticated])
+  }, [authenticated, activeTabId])
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -84,10 +119,63 @@ function App() {
     if (value !== undefined && wsRef.current?.readyState === WebSocket.OPEN) {
       const msg: Message = {
         type: 'update',
+        tabId: activeTabId,
         content: value,
       }
       wsRef.current.send(JSON.stringify(msg))
-      setContent(value)
+      setTabs(prev => prev.map(tab =>
+        tab.id === activeTabId ? { ...tab, content: value } : tab
+      ))
+    }
+  }
+
+  const createNewTab = () => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      const newId = `tab-${Date.now()}`
+      const msg: Message = {
+        type: 'create',
+        tabId: newId,
+        name: `Tab ${tabs.length + 1}`,
+      }
+      wsRef.current.send(JSON.stringify(msg))
+    }
+  }
+
+  const renameTab = (tabId: string, newName: string) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN && newName.trim()) {
+      const msg: Message = {
+        type: 'rename',
+        tabId: tabId,
+        name: newName.trim(),
+      }
+      wsRef.current.send(JSON.stringify(msg))
+    }
+    setEditingTabId(null)
+    setEditingTabName('')
+  }
+
+  const deleteTab = (tabId: string) => {
+    if (tabs.length <= 1) {
+      alert('Cannot delete the last tab')
+      return
+    }
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      const msg: Message = {
+        type: 'delete',
+        tabId: tabId,
+      }
+      wsRef.current.send(JSON.stringify(msg))
+    }
+  }
+
+  const clearCurrentTab = () => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      const msg: Message = {
+        type: 'update',
+        tabId: activeTabId,
+        content: '',
+      }
+      wsRef.current.send(JSON.stringify(msg))
     }
   }
 
@@ -138,7 +226,7 @@ function App() {
           </form>
           
           <div className="mt-6 text-center text-sm text-gray-500">
-            <p>💎 Secure single-user whiteboard</p>
+            <p>Secure single-user whiteboard</p>
           </div>
         </div>
       </div>
@@ -175,12 +263,7 @@ function App() {
           </button>
           
           <button
-            onClick={() => {
-              setContent('')
-              if (wsRef.current?.readyState === WebSocket.OPEN) {
-                wsRef.current.send(JSON.stringify({ type: 'update', content: '' }))
-              }
-            }}
+            onClick={clearCurrentTab}
             className="px-4 py-2 bg-red-100 text-red-700 rounded-lg font-medium hover:bg-red-200 transition"
           >
             Clear
@@ -188,19 +271,82 @@ function App() {
         </div>
       </div>
 
+      {/* Tabs */}
+      <div className="bg-white border-b border-gray-200 px-6 py-2 flex items-center space-x-2 overflow-x-auto">
+        {tabs.map(tab => (
+          <div
+            key={tab.id}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-t-lg cursor-pointer transition ${
+              activeTabId === tab.id
+                ? 'bg-gray-100 border-b-2 border-blue-600'
+                : 'hover:bg-gray-50'
+            }`}
+          >
+            {editingTabId === tab.id ? (
+              <input
+                type="text"
+                value={editingTabName}
+                onChange={(e) => setEditingTabName(e.target.value)}
+                onBlur={() => renameTab(tab.id, editingTabName)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') renameTab(tab.id, editingTabName)
+                  if (e.key === 'Escape') {
+                    setEditingTabId(null)
+                    setEditingTabName('')
+                  }
+                }}
+                className="px-2 py-1 border border-gray-300 rounded text-sm"
+                autoFocus
+              />
+            ) : (
+              <>
+                <span
+                  onClick={() => setActiveTabId(tab.id)}
+                  onDoubleClick={() => {
+                    setEditingTabId(tab.id)
+                    setEditingTabName(tab.name)
+                  }}
+                  className="text-sm font-medium"
+                >
+                  {tab.name}
+                </span>
+                {tabs.length > 1 && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      deleteTab(tab.id)
+                    }}
+                    className="text-gray-400 hover:text-red-600"
+                  >
+                    ×
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        ))}
+        <button
+          onClick={createNewTab}
+          className="px-3 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition"
+          title="New tab"
+        >
+          +
+        </button>
+      </div>
+
       {/* Main Content */}
       <div className="flex-1 overflow-hidden">
         {previewMode ? (
           <div className="h-full overflow-auto bg-white p-8">
             <div className="max-w-4xl mx-auto prose prose-lg">
-              <ReactMarkdown>{content}</ReactMarkdown>
+              <ReactMarkdown>{activeTab?.content || ''}</ReactMarkdown>
             </div>
           </div>
         ) : (
           <Editor
             height="100%"
             defaultLanguage="markdown"
-            value={content}
+            value={activeTab?.content || ''}
             onChange={handleEditorChange}
             theme="vs-light"
             options={{
@@ -225,7 +371,7 @@ function App() {
       {/* Status Bar */}
       <div className="bg-white border-t border-gray-200 px-6 py-2 flex items-center justify-between text-sm text-gray-600">
         <div>
-          Markdown supported • {content.length} characters
+          Markdown supported • {activeTab?.content.length || 0} characters • {tabs.length} {tabs.length === 1 ? 'tab' : 'tabs'}
         </div>
         <div>
           Press <kbd className="px-2 py-1 bg-gray-100 rounded text-xs">Ctrl+S</kbd> to save (auto-synced)
