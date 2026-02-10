@@ -35,6 +35,12 @@ function App() {
     const saved = localStorage.getItem('theme')
     return (saved as ThemeMode) || 'system'
   })
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    const saved = localStorage.getItem('sidebarOpen')
+    // Default to false on mobile, true on desktop
+    if (saved !== null) return saved === 'true'
+    return window.innerWidth >= 768
+  })
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimerRef = useRef<NodeJS.Timeout | null>(null)
   const editorRef = useRef<any>(null)
@@ -62,6 +68,12 @@ function App() {
 
     return () => mediaQuery.removeEventListener('change', updateTheme)
   }, [themeMode, getEffectiveTheme])
+
+  const toggleSidebar = () => {
+    const newState = !sidebarOpen
+    setSidebarOpen(newState)
+    localStorage.setItem('sidebarOpen', newState.toString())
+  }
 
   const cycleTheme = () => {
     const modes: ThemeMode[] = ['system', 'light', 'dark']
@@ -423,12 +435,31 @@ function App() {
   }
 
   return (
-    <div className={`h-screen flex flex-col ${effectiveTheme === 'dark' ? 'bg-[#1e1e1e]' : 'bg-gray-50'}`}>
+    <div className={`h-screen flex flex-col ${effectiveTheme === 'dark' ? 'bg-[#1e1e1e]' : 'bg-gray-50'}`} style={{ minWidth: '320px', minHeight: '480px' }}>
       {/* Top Header Bar */}
-      <div className={`${effectiveTheme === 'dark' ? 'bg-[#2d2d30] border-[#3e3e42]' : 'bg-white border-gray-200'} border-b px-6 py-3 flex items-center justify-between shadow-sm`}>
-        <div className="flex items-center space-x-4">
-          <h1 className={`text-xl font-bold ${effectiveTheme === 'dark' ? 'text-gray-100' : 'text-gray-800'}`}>BoardCast</h1>
-          <div className="flex items-center space-x-2">
+      <div className={`${effectiveTheme === 'dark' ? 'bg-[#2d2d30] border-[#3e3e42]' : 'bg-white border-gray-200'} border-b px-4 py-3 flex items-center justify-between shadow-sm`}>
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={toggleSidebar}
+            className={`p-2 rounded-lg transition ${
+              effectiveTheme === 'dark'
+                ? 'bg-[#3e3e42] text-gray-300 hover:bg-[#4e4e52]'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+            title={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              {sidebarOpen ? (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              ) : (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              )}
+            </svg>
+          </button>
+          
+          <h1 className={`text-lg md:text-xl font-bold ${effectiveTheme === 'dark' ? 'text-gray-100' : 'text-gray-800'}`}>BoardCast</h1>
+          
+          <div className="hidden sm:flex items-center space-x-2">
             <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`} />
             <span className={`text-sm ${effectiveTheme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
               {connected ? 'Connected' : 'Disconnected'}
@@ -497,92 +528,94 @@ function App() {
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="flex-1 flex overflow-hidden">
           {/* Sidebar */}
-          <div className={`w-64 border-r overflow-y-auto ${
-            effectiveTheme === 'dark' 
-              ? 'bg-[#252526] border-[#3e3e42]' 
-              : 'bg-white border-gray-200'
-          }`}>
-            <div className="p-4">
-              <button
-                onClick={createNewTab}
-                className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition shadow-sm mb-4 text-sm"
-              >
-                + New Tab
-              </button>
-              
-              <div className="space-y-2">
-                {tabs.map(tab => (
-                  <div
-                    key={tab.id}
-                    className={`group relative p-3 rounded-lg cursor-pointer transition ${
-                      activeTabId === tab.id
-                        ? effectiveTheme === 'dark'
-                          ? 'bg-[#37373d] border-2 border-blue-500'
-                          : 'bg-blue-50 border-2 border-blue-500'
-                        : effectiveTheme === 'dark'
-                          ? 'bg-[#2d2d30] border-2 border-transparent hover:bg-[#37373d]'
-                          : 'bg-gray-50 border-2 border-transparent hover:bg-gray-100'
-                    }`}
-                    onClick={() => setActiveTabId(tab.id)}
-                  >
-                    {editingTabId === tab.id ? (
-                      <input
-                        type="text"
-                        value={editingTabName}
-                        onChange={(e) => setEditingTabName(e.target.value)}
-                        onBlur={() => renameTab(tab.id, editingTabName)}
-                        onKeyPress={(e) => {
-                          if (e.key === 'Enter') {
-                            renameTab(tab.id, editingTabName)
-                          }
-                        }}
-                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        autoFocus
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                    ) : (
-                      <div className="flex items-center justify-between">
-                        <span className={`text-sm font-medium truncate ${
-                          effectiveTheme === 'dark' ? 'text-gray-200' : 'text-gray-800'
-                        }`}>
-                          {tab.name}
-                        </span>
-                        <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setEditingTabId(tab.id)
-                              setEditingTabName(tab.name)
-                            }}
-                            className="p-1 text-gray-600 hover:text-blue-600 rounded"
-                            title="Rename"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                            </svg>
-                          </button>
-                          {tabs.length > 1 && (
+          {sidebarOpen && (
+            <div className={`w-64 border-r overflow-y-auto flex-shrink-0 ${
+              effectiveTheme === 'dark' 
+                ? 'bg-[#252526] border-[#3e3e42]' 
+                : 'bg-white border-gray-200'
+            }`}>
+              <div className="p-4">
+                <button
+                  onClick={createNewTab}
+                  className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition shadow-sm mb-4 text-sm"
+                >
+                  + New Tab
+                </button>
+                
+                <div className="space-y-2">
+                  {tabs.map(tab => (
+                    <div
+                      key={tab.id}
+                      className={`group relative p-3 rounded-lg cursor-pointer transition ${
+                        activeTabId === tab.id
+                          ? effectiveTheme === 'dark'
+                            ? 'bg-[#37373d] border-2 border-blue-500'
+                            : 'bg-blue-50 border-2 border-blue-500'
+                          : effectiveTheme === 'dark'
+                            ? 'bg-[#2d2d30] border-2 border-transparent hover:bg-[#37373d]'
+                            : 'bg-gray-50 border-2 border-transparent hover:bg-gray-100'
+                      }`}
+                      onClick={() => setActiveTabId(tab.id)}
+                    >
+                      {editingTabId === tab.id ? (
+                        <input
+                          type="text"
+                          value={editingTabName}
+                          onChange={(e) => setEditingTabName(e.target.value)}
+                          onBlur={() => renameTab(tab.id, editingTabName)}
+                          onKeyPress={(e) => {
+                            if (e.key === 'Enter') {
+                              renameTab(tab.id, editingTabName)
+                            }
+                          }}
+                          className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          autoFocus
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      ) : (
+                        <div className="flex items-center justify-between">
+                          <span className={`text-sm font-medium truncate ${
+                            effectiveTheme === 'dark' ? 'text-gray-200' : 'text-gray-800'
+                          }`}>
+                            {tab.name}
+                          </span>
+                          <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition">
                             <button
                               onClick={(e) => {
                                 e.stopPropagation()
-                                deleteTab(tab.id)
+                                setEditingTabId(tab.id)
+                                setEditingTabName(tab.name)
                               }}
-                              className="p-1 text-gray-600 hover:text-red-600 rounded"
-                              title="Delete"
+                              className="p-1 text-gray-600 hover:text-blue-600 rounded"
+                              title="Rename"
                             >
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                               </svg>
                             </button>
-                          )}
+                            {tabs.length > 1 && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  deleteTab(tab.id)
+                                }}
+                                className="p-1 text-gray-600 hover:text-red-600 rounded"
+                                title="Delete"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Editor */}
           <div className="flex-1">
@@ -621,15 +654,15 @@ function App() {
         </div>
 
         {/* Bottom Status Bar */}
-        <div className={`border-t px-6 py-2 flex items-center justify-between text-sm ${
+        <div className={`border-t px-4 py-2 flex items-center justify-between text-xs md:text-sm ${
           effectiveTheme === 'dark'
             ? 'bg-[#007acc] border-[#007acc] text-white'
             : 'bg-blue-600 border-blue-600 text-white'
         }`}>
-          <div className="flex items-center space-x-4">
-            <span>Tab: {activeTab?.name || 'None'}</span>
-            <span>Lines: {(activeTab?.content?.split('\n').length || 0)}</span>
-            <span>Characters: {activeTab?.content?.length || 0}</span>
+          <div className="flex items-center space-x-2 md:space-x-4">
+            <span className="truncate">Tab: {activeTab?.name || 'None'}</span>
+            <span className="hidden sm:inline">Lines: {(activeTab?.content?.split('\n').length || 0)}</span>
+            <span className="hidden md:inline">Characters: {activeTab?.content?.length || 0}</span>
           </div>
           <div className="flex items-center space-x-2">
             <span>Font: {fontSize}px</span>

@@ -1,6 +1,6 @@
 # BoardCast
 
-A lightweight, real-time collaborative markdown editor with multi-tab support and persistent storage.
+A lightweight, real-time collaborative text editor with multi-tab support and persistent storage.
 
 ## Features
 
@@ -13,6 +13,7 @@ A lightweight, real-time collaborative markdown editor with multi-tab support an
 - **Session-based Authentication**: Secure HTTP-only cookie authentication
 - **Automatic Reconnection**: Seamless reconnection on connection loss
 - **Optimized Input**: Debounced updates and cursor position preservation for smooth typing
+- **Mobile-Friendly**: Responsive design with collapsible sidebar for mobile devices
 
 ## Quick Start
 
@@ -87,7 +88,7 @@ npm run build
 cd ..
 
 # Build and run backend
-go build -o boardcast ./cmd/boardcast
+go build -trimpath -ldflags "-s -w" -o boardcast ./cmd/boardcast
 BOARDCAST_PASSWORD=your-password ./boardcast
 ```
 
@@ -96,6 +97,7 @@ BOARDCAST_PASSWORD=your-password ./boardcast
 1. Open http://localhost:8080 in your browser
 2. Enter your password to authenticate
 3. Start editing:
+   - Toggle sidebar visibility with the menu button (helpful on mobile)
    - Create new tabs with the "+ New Tab" button
    - Switch between tabs in the sidebar
    - Rename tabs by clicking the edit icon
@@ -104,6 +106,14 @@ BOARDCAST_PASSWORD=your-password ./boardcast
    - Click the +/- buttons to increase/decrease font size
    - Click the theme button to cycle between System/Light/Dark modes
 5. Your changes are automatically saved and synced across all connected clients
+
+## Mobile Support
+
+BoardCast is fully responsive and mobile-friendly:
+- **Collapsible Sidebar**: Toggle sidebar visibility to maximize editor space
+- **Touch-Friendly**: All buttons and controls are optimized for touch input
+- **Minimum Viewport**: Supports devices as small as 320x480 pixels
+- **Responsive Text**: Status bar adapts to screen size
 
 ## Architecture
 
@@ -124,6 +134,7 @@ BOARDCAST_PASSWORD=your-password ./boardcast
 - **State Management**: React hooks for efficient state updates
 - **Theme System**: CSS variables and Tailwind classes for consistent theming
 - **Input Optimization**: Cursor position preservation and debounced updates
+- **Responsive Design**: Mobile-first approach with flexible layout
 
 ## Security
 
@@ -183,14 +194,16 @@ npm run dev
 
 Frontend dev server runs on http://localhost:5173 and proxies API requests to the backend on port 8080.
 
+## Build Optimization
+
+The binary is built with optimization flags to reduce size:
+- `-trimpath`: Remove file system paths from binary
+- `-ldflags "-s -w"`: Strip debug information and symbol tables
+
+Typical binary size: ~15-20MB (compared to ~40MB without optimization)
+
 ## License
 
 BSD-3-Clause License
 
 Copyright (c) 2026, Mikyla
-
-## Links
-
-- Repository: https://github.com/yosebyte/boardcast
-- Docker Images: https://github.com/yosebyte/boardcast/pkgs/container/boardcast
-- Issues: https://github.com/yosebyte/boardcast/issues

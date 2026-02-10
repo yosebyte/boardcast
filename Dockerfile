@@ -13,7 +13,7 @@ COPY go.mod ./
 COPY cmd/ ./cmd/
 RUN go mod download
 RUN go mod tidy
-RUN CGO_ENABLED=0 GOOS=linux go build -o boardcast ./cmd/boardcast
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags "-s -w" -o boardcast ./cmd/boardcast
 
 # Final stage
 FROM alpine:latest
