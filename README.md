@@ -2,8 +2,6 @@
 
 A modern, real-time collaborative whiteboard application with Markdown support, multi-tab functionality, persistent storage, and rich history tracking. Perfect for teams, documentation, brainstorming, and code sharing.
 
-![BoardCast Demo](docs/demo.png)
-
 ## Features
 
 ### Core Functionality
