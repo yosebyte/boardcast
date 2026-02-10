@@ -2,7 +2,7 @@
 
 A modern, real-time collaborative whiteboard application with Markdown support. Perfect for sharing notes, code snippets, and ideas across multiple sessions.
 
-![BoardCast Demo](docs/demo.gif)
+![BoardCast Demo](docs/demo.png)
 
 ## Features
 
