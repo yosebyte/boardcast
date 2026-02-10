@@ -39,12 +39,23 @@ A modern, real-time collaborative whiteboard application with Markdown support, 
 
 ### Login Screen
 ![Login Screen](docs/screenshot-login.png)
+*Secure password-based authentication with JWT tokens*
 
-### Editor Mode with Multiple Tabs
+### Editor Mode with New Features
 ![Editor Mode](docs/screenshot-editor.png)
+*Multi-tab interface with Upload Image, History, Snapshots, Preview, and Clear buttons*
+
+### History Tracking
+![History Feature](docs/screenshot-history.png)
+*Browse and restore from complete edit history with timestamps*
+
+### Snapshot Management
+![Snapshot Feature](docs/screenshot-snapshots.png)
+*Create named snapshots and restore entire workspace with one click*
 
 ### Preview Mode
 ![Preview Mode](docs/screenshot-preview.png)
+*Live Markdown preview with rendered formatting*
 
 ## Quick Start
 

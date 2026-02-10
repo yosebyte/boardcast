@@ -2,7 +2,6 @@ package main
 
 import (
 	"crypto/rand"
-	"encoding/base64"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -10,7 +9,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
