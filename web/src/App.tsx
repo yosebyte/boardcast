@@ -75,6 +75,12 @@ function App() {
   }, [])
 
   const connectWebSocket = useCallback(() => {
+    // Close existing connection if any
+    if (wsRef.current) {
+      wsRef.current.close()
+      wsRef.current = null
+    }
+
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const ws = new WebSocket(`${protocol}//${window.location.host}/api/ws`)
 
@@ -123,15 +129,18 @@ function App() {
     ws.onclose = () => {
       console.log('WebSocket disconnected')
       setConnected(false)
-      setTimeout(() => {
-        if (authenticated) {
-          connectWebSocket()
-        }
-      }, 3000)
+      // Only reconnect if we're still authenticated and not manually closing
+      if (authenticated && wsRef.current === ws) {
+        setTimeout(() => {
+          if (authenticated) {
+            connectWebSocket()
+          }
+        }, 3000)
+      }
     }
 
     wsRef.current = ws
-  }, [authenticated, activeTabId])
+  }, [authenticated])
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -167,11 +176,14 @@ function App() {
       
       if (wsRef.current) {
         wsRef.current.close()
+        wsRef.current = null
       }
       
       setAuthenticated(false)
       setConnected(false)
       setTabs([])
+      setPassword('') // Clear password
+      setActiveTabId('default')
     } catch (err) {
       console.error('Logout failed:', err)
     }
@@ -558,7 +570,8 @@ function App() {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex overflow-hidden">
         {/* Sidebar */}
         <div className="w-64 bg-white border-r border-gray-200 overflow-y-auto">
           <div className="p-4">
@@ -647,6 +660,7 @@ function App() {
             </div>
           ) : (
             <Editor
+              key={activeTabId}
               height="100%"
               defaultLanguage="markdown"
               value={activeTab?.content || ''}
@@ -665,6 +679,20 @@ function App() {
             />
           )}
         </div>
+      </div>
+
+      {/* Bottom Status Bar */}
+      <div className="bg-white border-t border-gray-200 px-6 py-2 flex items-center justify-between text-sm text-gray-600">
+        <div className="flex items-center space-x-4">
+          <span>Tab: {activeTab?.name || 'None'}</span>
+          <span>Characters: {activeTab?.content?.length || 0}</span>
+          <span>Lines: {(activeTab?.content?.split('\n').length || 0)}</span>
+        </div>
+        <div className="flex items-center space-x-2">
+          <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`} />
+          <span>{connected ? 'Connected' : 'Disconnected'}</span>
+        </div>
+      </div>
       </div>
 
       {/* History Modal */}
